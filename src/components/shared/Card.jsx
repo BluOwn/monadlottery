@@ -1,37 +1,44 @@
+import React from 'react';
+
 const Card = ({ 
   children, 
   className = '', 
-  variant = 'default', // default, primary, outline
-  elevation = 'md', // none, sm, md, lg
+  title,
+  subtitle,
+  footer,
   noPadding = false,
+  border = false,
 }) => {
-  // Base styles
-  const baseStyles = 'bg-white dark:bg-dark-800 rounded-xl';
-  
-  // Variant styles
-  const variantStyles = {
-    default: '',
-    primary: 'border-2 border-primary-200 dark:border-primary-800',
-    outline: 'border border-dark-200 dark:border-dark-700',
-  };
-  
-  // Elevation (shadow) styles
-  const elevationStyles = {
-    none: '',
-    sm: 'shadow-sm',
-    md: 'shadow-md',
-    lg: 'shadow-lg',
-  };
-  
-  // Padding styles
-  const paddingStyles = noPadding ? '' : 'p-6';
-  
-  // Combine all styles
-  const cardStyles = `${baseStyles} ${variantStyles[variant]} ${elevationStyles[elevation]} ${paddingStyles} ${className}`;
-  
   return (
-    <div className={cardStyles}>
+    <div 
+      className={`
+        bg-white dark:bg-dark-800 
+        rounded-xl shadow-lg
+        ${border ? 'border border-dark-200 dark:border-dark-700' : ''}
+        ${noPadding ? '' : 'p-6'} 
+        ${className}
+      `}
+    >
+      {title && (
+        <div className="mb-4">
+          <h2 className="text-xl font-semibold text-dark-900 dark:text-white">
+            {title}
+          </h2>
+          {subtitle && (
+            <p className="text-dark-600 dark:text-dark-400 mt-1">
+              {subtitle}
+            </p>
+          )}
+        </div>
+      )}
+      
       {children}
+      
+      {footer && (
+        <div className="mt-6 pt-4 border-t border-dark-200 dark:border-dark-700">
+          {footer}
+        </div>
+      )}
     </div>
   );
 };

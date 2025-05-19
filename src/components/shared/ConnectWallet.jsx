@@ -1,122 +1,59 @@
 import { useState, useEffect } from 'react';
 import { FiWifi, FiUser, FiAlertTriangle } from 'react-icons/fi';
 import { useWallet } from '../../hooks/useWallet';
-import { MONAD_TESTNET_CHAIN_ID, MONAD_TESTNET_CONFIG } from '../../constants/contractAddresses';
-import toast from 'react-hot-toast';
+import { MONAD_TESTNET_CHAIN_ID } from '../../constants/contractAddresses';
 
 const ConnectWallet = ({ compact = false }) => {
-  const { connect, disconnect, address, isConnected, chainId } = useWallet();
-  const [isCorrectChain, setIsCorrectChain] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [showNetworkMenu, setShowNetworkMenu] = useState(false);
+  const { connect, disconnect, address, isConnected, chainId, isConnecting, switchNetwork, isCorrectNetwork } = useWallet();
+  const [showMenu, setShowMenu] = useState(false);
 
-  useEffect(() => {
-    if (!chainId) {
-      setIsCorrectChain(false);
-      return;
-    }
-    
-    // Normalize chain IDs before comparison to handle different formats
-    const normalizeChainId = (id) => {
-      if (typeof id === 'string') {
-        // Remove '0x' prefix if present and convert to number
-        return id.startsWith('0x') ? parseInt(id, 16).toString() : id;
-      }
-      return id.toString();
-    };
-    
-    // Compare the normalized chain IDs
-    const normalizedChainId = normalizeChainId(chainId);
-    const normalizedTargetChainId = normalizeChainId(MONAD_TESTNET_CHAIN_ID);
-    const isCorrect = normalizedChainId === normalizedTargetChainId;
-    
-    setIsCorrectChain(isCorrect);
-    
-    // Show toast notification when switching to a wrong network
-    if (isConnected && !isCorrect) {
-      toast.error('Please switch to Monad Testnet to use this application');
-    }
-  }, [chainId, isConnected]);
-
+  // Format address for display
   const formatAddress = (addr) => {
     if (!addr) return '';
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
 
+  // Handle connect button click
   const handleConnect = async () => {
-    // Prevent multiple connection attempts
     if (isConnecting) return;
     
     try {
-      setIsConnecting(true);
       await connect();
     } catch (error) {
-      console.error('Failed to connect wallet:', error);
-      toast.error('Failed to connect wallet. Please try again.');
-    } finally {
-      setIsConnecting(false);
+      console.error('Connect error handled in wallet store:', error);
     }
   };
 
-  const handleDisconnect = async () => {
+  // Handle disconnect button click
+  const handleDisconnect = () => {
+    disconnect();
+    setShowMenu(false);
+  };
+
+  // Handle switch network button click
+  const handleSwitchNetwork = async () => {
     try {
-      await disconnect();
-      toast.success('Wallet disconnected');
+      await switchNetwork();
+      setShowMenu(false);
     } catch (error) {
-      console.error('Failed to disconnect wallet:', error);
+      console.error('Switch network error:', error);
     }
   };
 
-  const switchToMonadTestnet = async () => {
-    if (typeof window === 'undefined' || !window.ethereum) {
-      toast.error('No Ethereum wallet detected');
-      return;
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setShowMenu(false);
+    };
+
+    if (showMenu) {
+      document.addEventListener('click', handleClickOutside);
     }
-    
-    try {
-      setIsConnecting(true);
-      
-      // Format chainId as hex with 0x prefix
-      const chainIdHex = `0x${parseInt(MONAD_TESTNET_CHAIN_ID).toString(16)}`;
-      
-      await window.ethereum.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: chainIdHex }],
-      });
-      
-      toast.success('Switched to Monad Testnet');
-    } catch (switchError) {
-      console.error('Switch error:', switchError);
-      
-      // This error code indicates that the chain has not been added to MetaMask
-      if (switchError.code === 4902) {
-        try {
-          await window.ethereum.request({
-            method: 'wallet_addEthereumChain',
-            params: [
-              {
-                chainId: `0x${parseInt(MONAD_TESTNET_CHAIN_ID).toString(16)}`,
-                chainName: MONAD_TESTNET_CONFIG.name,
-                nativeCurrency: MONAD_TESTNET_CONFIG.nativeCurrency,
-                rpcUrls: MONAD_TESTNET_CONFIG.rpcUrls.default.http,
-                blockExplorerUrls: [MONAD_TESTNET_CONFIG.blockExplorers.default.url],
-              },
-            ],
-          });
-          
-          toast.success('Monad Testnet added to your wallet');
-        } catch (addError) {
-          console.error('Error adding Monad testnet:', addError);
-          toast.error('Could not add Monad Testnet to your wallet');
-        }
-      } else {
-        toast.error('Failed to switch network. Please try manually switching to Monad Testnet in your wallet.');
-      }
-    } finally {
-      setIsConnecting(false);
-      setShowNetworkMenu(false);
-    }
-  };
+
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [showMenu]);
 
   // If not connected, show connect button
   if (!isConnected) {
@@ -149,12 +86,15 @@ const ConnectWallet = ({ compact = false }) => {
     );
   }
 
-  // If connected but on wrong network, show switch network button and menu
-  if (!isCorrectChain) {
+  // If connected but on wrong network, show switch network button
+  if (!isCorrectNetwork) {
     return (
       <div className="relative">
         <button
-          onClick={() => setShowNetworkMenu(!showNetworkMenu)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowMenu(!showMenu);
+          }}
           className={`${
             compact
               ? 'px-2 py-2 rounded-full'
@@ -166,15 +106,18 @@ const ConnectWallet = ({ compact = false }) => {
           {!compact && <span>Wrong Network</span>}
         </button>
         
-        {showNetworkMenu && (
-          <div className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-dark-800 ring-1 ring-black ring-opacity-5 z-50">
+        {showMenu && (
+          <div 
+            className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-dark-800 ring-1 ring-black ring-opacity-5 z-50"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="py-1" role="menu" aria-orientation="vertical">
               <div className="px-4 py-2 text-sm text-dark-500 dark:text-dark-400">
                 Please switch to Monad Testnet
               </div>
               
               <button
-                onClick={switchToMonadTestnet}
+                onClick={handleSwitchNetwork}
                 className="block w-full text-left px-4 py-2 text-sm text-dark-700 dark:text-dark-300 hover:bg-dark-100 dark:hover:bg-dark-700"
                 role="menuitem"
               >
@@ -199,7 +142,10 @@ const ConnectWallet = ({ compact = false }) => {
   return (
     <div className="relative">
       <button
-        onClick={() => setShowNetworkMenu(!showNetworkMenu)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setShowMenu(!showMenu);
+        }}
         className={`${
           compact
             ? 'px-2 py-2 rounded-full'
@@ -211,8 +157,11 @@ const ConnectWallet = ({ compact = false }) => {
         {!compact && <span>{formatAddress(address)}</span>}
       </button>
       
-      {showNetworkMenu && (
-        <div className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-dark-800 ring-1 ring-black ring-opacity-5 z-50">
+      {showMenu && (
+        <div 
+          className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-dark-800 ring-1 ring-black ring-opacity-5 z-50"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="py-1" role="menu" aria-orientation="vertical">
             <div className="px-4 py-2 text-sm font-medium text-dark-900 dark:text-white">
               Connected to Monad Testnet
