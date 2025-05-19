@@ -77,11 +77,6 @@ const Footer = () => {
                   Contract
                 </Link>
               </li>
-              <li>
-                <Link href="/my-account" className="text-dark-600 dark:text-dark-300 hover:text-primary-600 dark:hover:text-primary-500 transition-colors">
-                  My Account
-                </Link>
-              </li>
             </ul>
           </div>
 

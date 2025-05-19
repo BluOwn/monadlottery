@@ -9,12 +9,12 @@ const Header = () => {
   const [scrolled, setScrolled] = useState(false);
   const router = useRouter();
 
+  // Updated navigation - removed My Account link
   const navigation = [
     { name: 'Home', href: '/' },
     { name: 'About', href: '/about' },
     { name: 'Contact', href: '/contact' },
     { name: 'Contract', href: '/contract' },
-    { name: 'My Account', href: '/my-account' },
   ];
 
   useEffect(() => {
