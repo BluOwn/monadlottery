@@ -1,5 +1,5 @@
 // Define correct chain ID for Monad testnet
-export const MONAD_TESTNET_CHAIN_ID = '10143'; // Example chain ID for Monad testnet
+export const MONAD_TESTNET_CHAIN_ID = '10143'; // Chain ID for Monad testnet
 
 export const MONAD_LOTTERY_CONTRACT_ADDRESS = '0xC9105a5DDDF4605C98712568cF2AA0367f6AaBA2';
 
@@ -10,7 +10,7 @@ export const SOCIAL_LINKS = {
 };
 
 export const MONAD_TESTNET_CONFIG = {
-  id: parseInt(MONAD_TESTNET_CHAIN_ID, 16),
+  id: parseInt(MONAD_TESTNET_CHAIN_ID),
   name: 'Monad Testnet',
   network: 'monad-testnet',
   nativeCurrency: {

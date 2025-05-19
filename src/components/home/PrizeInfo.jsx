@@ -1,21 +1,13 @@
 import React from 'react';
-import { FiAward, FiTrophy, FiGift } from 'react-icons/fi';
 import { useLottery } from '../../hooks/useLottery';
-import { useWallet } from '../../hooks/useWallet';
+
+// Let's temporarily comment out the icon imports to see if that's causing the issue
+// import { FiAward, FiTrophy, FiGift } from 'react-icons/fi';
 
 const PrizeInfo = () => {
-  const { isConnected } = useWallet() || { isConnected: false };
-  const { 
-    lotteryStatus, 
-    loading, 
-    error 
-  } = useLottery() || { 
-    lotteryStatus: { totalPoolAmount: '0' }, 
-    loading: false, 
-    error: null 
-  };
+  const { lotteryStatus, loading, error } = useLottery();
 
-  // Ensure lotteryStatus and totalPoolAmount exist and fallback to 0 if not
+  // Ensure totalPoolAmount exists with a fallback to 0
   const totalPoolAmount = parseFloat(lotteryStatus?.totalPoolAmount || '0');
 
   const firstPlacePrize = totalPoolAmount * 0.4;
@@ -23,39 +15,8 @@ const PrizeInfo = () => {
   const thirdPlacePrize = totalPoolAmount * 0.1;
   const topBuyerPrize = totalPoolAmount * 0.1;
 
-  // Define prizes array with proper checks
-  const prizes = [
-    {
-      place: 'First Place',
-      percentage: '40%',
-      amount: `${firstPlacePrize.toFixed(2)} MON`,
-      icon: <FiTrophy className="h-12 w-12 text-yellow-500" />,
-      description: 'First place winner gets 40% of the total prize pool',
-    },
-    {
-      place: 'Second Place',
-      percentage: '20%',
-      amount: `${secondPlacePrize.toFixed(2)} MON`,
-      icon: <FiAward className="h-12 w-12 text-gray-400" />,
-      description: 'Second place winner gets 20% of the total prize pool',
-    },
-    {
-      place: 'Third Place',
-      percentage: '10%',
-      amount: `${thirdPlacePrize.toFixed(2)} MON`,
-      icon: <FiAward className="h-12 w-12 text-amber-700" />,
-      description: 'Third place winner gets 10% of the total prize pool',
-    },
-    {
-      place: 'Top Buyer',
-      percentage: '10%',
-      amount: `${topBuyerPrize.toFixed(2)} MON`,
-      icon: <FiGift className="h-12 w-12 text-primary-600" />,
-      description: 'The person who buys the most tickets gets 10% of the prize pool',
-    },
-  ];
-
-  if (loading === true) {
+  // Handle loading state
+  if (loading) {
     return (
       <div className="py-16 bg-white dark:bg-dark-900">
         <div className="container-custom text-center">
@@ -65,6 +26,7 @@ const PrizeInfo = () => {
     );
   }
 
+  // Handle error state
   if (error) {
     return (
       <div className="py-16 bg-white dark:bg-dark-900">
@@ -89,28 +51,85 @@ const PrizeInfo = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {prizes && prizes.map((prize) => (
-            <div
-              key={prize.place}
-              className="card text-center border border-dark-200 dark:border-dark-700 hover:border-primary-300 dark:hover:border-primary-700 transition-all duration-300 hover:shadow-lg"
-            >
-              <div className="flex justify-center mb-4">
-                {prize.icon}
-              </div>
-              <h3 className="text-xl font-bold text-dark-900 dark:text-white mb-2">
-                {prize.place}
-              </h3>
-              <div className="text-2xl font-extrabold bg-gradient-to-r from-primary-500 to-secondary-500 bg-clip-text text-transparent mb-2">
-                {prize.amount}
-              </div>
-              <div className="text-sm font-semibold text-dark-700 dark:text-dark-300 mb-3">
-                {prize.percentage} of pool
-              </div>
-              <p className="text-sm text-dark-500 dark:text-dark-400">
-                {prize.description}
-              </p>
+          {/* First Place */}
+          <div className="card text-center border border-dark-200 dark:border-dark-700 hover:border-primary-300 dark:hover:border-primary-700 transition-all duration-300 hover:shadow-lg">
+            <div className="flex justify-center mb-4">
+              {/* <FiTrophy className="h-12 w-12 text-yellow-500" /> */}
+              <div className="h-12 w-12 bg-yellow-500 rounded-full flex items-center justify-center text-white">1</div>
             </div>
-          ))}
+            <h3 className="text-xl font-bold text-dark-900 dark:text-white mb-2">
+              First Place
+            </h3>
+            <div className="text-2xl font-extrabold bg-gradient-to-r from-primary-500 to-secondary-500 bg-clip-text text-transparent mb-2">
+              {firstPlacePrize.toFixed(2)} MON
+            </div>
+            <div className="text-sm font-semibold text-dark-700 dark:text-dark-300 mb-3">
+              40% of pool
+            </div>
+            <p className="text-sm text-dark-500 dark:text-dark-400">
+              First place winner gets 40% of the total prize pool
+            </p>
+          </div>
+
+          {/* Second Place */}
+          <div className="card text-center border border-dark-200 dark:border-dark-700 hover:border-primary-300 dark:hover:border-primary-700 transition-all duration-300 hover:shadow-lg">
+            <div className="flex justify-center mb-4">
+              {/* <FiAward className="h-12 w-12 text-gray-400" /> */}
+              <div className="h-12 w-12 bg-gray-400 rounded-full flex items-center justify-center text-white">2</div>
+            </div>
+            <h3 className="text-xl font-bold text-dark-900 dark:text-white mb-2">
+              Second Place
+            </h3>
+            <div className="text-2xl font-extrabold bg-gradient-to-r from-primary-500 to-secondary-500 bg-clip-text text-transparent mb-2">
+              {secondPlacePrize.toFixed(2)} MON
+            </div>
+            <div className="text-sm font-semibold text-dark-700 dark:text-dark-300 mb-3">
+              20% of pool
+            </div>
+            <p className="text-sm text-dark-500 dark:text-dark-400">
+              Second place winner gets 20% of the total prize pool
+            </p>
+          </div>
+
+          {/* Third Place */}
+          <div className="card text-center border border-dark-200 dark:border-dark-700 hover:border-primary-300 dark:hover:border-primary-700 transition-all duration-300 hover:shadow-lg">
+            <div className="flex justify-center mb-4">
+              {/* <FiAward className="h-12 w-12 text-amber-700" /> */}
+              <div className="h-12 w-12 bg-amber-700 rounded-full flex items-center justify-center text-white">3</div>
+            </div>
+            <h3 className="text-xl font-bold text-dark-900 dark:text-white mb-2">
+              Third Place
+            </h3>
+            <div className="text-2xl font-extrabold bg-gradient-to-r from-primary-500 to-secondary-500 bg-clip-text text-transparent mb-2">
+              {thirdPlacePrize.toFixed(2)} MON
+            </div>
+            <div className="text-sm font-semibold text-dark-700 dark:text-dark-300 mb-3">
+              10% of pool
+            </div>
+            <p className="text-sm text-dark-500 dark:text-dark-400">
+              Third place winner gets 10% of the total prize pool
+            </p>
+          </div>
+
+          {/* Top Buyer */}
+          <div className="card text-center border border-dark-200 dark:border-dark-700 hover:border-primary-300 dark:hover:border-primary-700 transition-all duration-300 hover:shadow-lg">
+            <div className="flex justify-center mb-4">
+              {/* <FiGift className="h-12 w-12 text-primary-600" /> */}
+              <div className="h-12 w-12 bg-primary-600 rounded-full flex items-center justify-center text-white">★</div>
+            </div>
+            <h3 className="text-xl font-bold text-dark-900 dark:text-white mb-2">
+              Top Buyer
+            </h3>
+            <div className="text-2xl font-extrabold bg-gradient-to-r from-primary-500 to-secondary-500 bg-clip-text text-transparent mb-2">
+              {topBuyerPrize.toFixed(2)} MON
+            </div>
+            <div className="text-sm font-semibold text-dark-700 dark:text-dark-300 mb-3">
+              10% of pool
+            </div>
+            <p className="text-sm text-dark-500 dark:text-dark-400">
+              The person who buys the most tickets gets 10% of the prize pool
+            </p>
+          </div>
         </div>
 
         <div className="mt-12 text-center">

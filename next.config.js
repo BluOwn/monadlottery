@@ -3,7 +3,7 @@ const nextConfig = {
   reactStrictMode: true,
   // swcMinify: true, <- Remove this line
   images: {
-    domains: ['https://testnet.monadexplorer.com', 'monadexplorer.com'],
+    domains: ['testnet.monadexplorer.com', 'monadexplorer.com'],
   },
   async redirects() {
     return [

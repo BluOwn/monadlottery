@@ -10,19 +10,19 @@ import toast, { Toaster } from 'react-hot-toast';
 const MyAccountPage = () => {
   const { isConnected, address } = useWallet();
   const { 
-    lotteryStatus = {}, // Provide default empty object
-    userTickets = [], // Provide default empty array
-    userTicketCount = 0, // Provide default value
-    loading = false, 
-    error = null,
-    topBuyer = { address: null, ticketCount: 0 }, // Provide default object
-    refreshUserTickets = () => {} // Provide default empty function
-  } = useLottery() || {}; // Add fallback if useLottery returns undefined
+    userTickets, 
+    userTicketCount,
+    lotteryStatus,
+    topBuyer,
+    loading, 
+    error,
+    refreshUserTickets
+  } = useLottery();
   
   const [activePage, setActivePage] = useState(0);
   
   useEffect(() => {
-    if (isConnected && refreshUserTickets) {
+    if (isConnected) {
       refreshUserTickets();
     }
   }, [isConnected, refreshUserTickets]);
@@ -32,20 +32,21 @@ const MyAccountPage = () => {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
   
-  const isTopBuyer = address && topBuyer && topBuyer.address === address;
+  // Check if user is the top buyer
+  const isTopBuyer = address && topBuyer?.address === address;
   
-  // Group tickets by page for easier viewing
+  // Group tickets by page for easier viewing - with added safety checks
   const ticketsPerPage = 50;
   const ticketPages = [];
   
-  if (userTickets && userTickets.length > 0) {
+  if (Array.isArray(userTickets) && userTickets.length > 0) {
     for (let i = 0; i < userTickets.length; i += ticketsPerPage) {
       ticketPages.push(userTickets.slice(i, i + ticketsPerPage));
     }
   }
   
   const handleRefresh = () => {
-    if (!isConnected || !refreshUserTickets) return;
+    if (!isConnected) return;
     
     toast.promise(
       refreshUserTickets(),
@@ -63,6 +64,7 @@ const MyAccountPage = () => {
     window.location.href = '/#ticket-purchase';
   };
   
+  // If not connected, show connect wallet message
   if (!isConnected) {
     return (
       <>
@@ -94,7 +96,7 @@ const MyAccountPage = () => {
       </>
     );
   }
-
+  
   return (
     <>
       <Head>
@@ -144,7 +146,7 @@ const MyAccountPage = () => {
                         Wallet Address
                       </span>
                       <span className="font-mono text-dark-800 dark:text-dark-200">
-                        {address || 'Not available'}
+                        {address}
                       </span>
                     </div>
                     
@@ -153,7 +155,7 @@ const MyAccountPage = () => {
                         Total Tickets Purchased
                       </span>
                       <span className="text-lg font-bold text-dark-800 dark:text-dark-200">
-                        {userTicketCount || 0}
+                        {userTicketCount}
                       </span>
                     </div>
                   </div>
@@ -169,13 +171,13 @@ const MyAccountPage = () => {
                             Top Buyer
                           </h3>
                           <p className="text-sm text-amber-700 dark:text-amber-400">
-                            Congratulations! You are currently the top buyer with {topBuyer.ticketCount} tickets!
+                            Congratulations! You are currently the top buyer with {topBuyer?.ticketCount} tickets!
                           </p>
                         </div>
                       </div>
                     )}
                     
-                    {!isTopBuyer && topBuyer && topBuyer.address && (
+                    {!isTopBuyer && topBuyer?.address && (
                       <div className="space-y-3">
                         <div>
                           <span className="text-sm text-dark-500 dark:text-dark-400 block mb-1">
@@ -192,7 +194,7 @@ const MyAccountPage = () => {
                               Tickets Needed to Become Top Buyer
                             </span>
                             <span className="text-lg font-bold text-primary-600 dark:text-primary-500">
-                              {(topBuyer.ticketCount - userTicketCount + 1) || 0}
+                              {topBuyer.ticketCount - userTicketCount + 1}
                             </span>
                           </div>
                         )}
@@ -206,10 +208,10 @@ const MyAccountPage = () => {
               <div className="card">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xl font-semibold text-dark-900 dark:text-white">
-                    My Tickets ({userTicketCount || 0})
+                    My Tickets ({userTicketCount})
                   </h2>
                   
-                  {lotteryStatus && lotteryStatus.isActive && (
+                  {lotteryStatus?.isActive && (
                     <button
                       onClick={scrollToTicketSection}
                       className="btn-primary"
@@ -230,13 +232,13 @@ const MyAccountPage = () => {
                       Loading your tickets...
                     </p>
                   </div>
-                ) : userTickets.length === 0 ? (
+                ) : !Array.isArray(userTickets) || userTickets.length === 0 ? (
                   <div className="text-center py-8 border-2 border-dashed border-dark-200 dark:border-dark-700 rounded-lg">
                     <FiTicket className="h-12 w-12 text-dark-400 dark:text-dark-500 mx-auto mb-4" />
                     <p className="text-dark-600 dark:text-dark-400 mb-4">
                       You haven&apos;t purchased any tickets yet.
                     </p>
-                    {lotteryStatus && lotteryStatus.isActive && (
+                    {lotteryStatus?.isActive && (
                       <button
                         onClick={scrollToTicketSection}
                         className="btn-primary inline-flex"
@@ -266,19 +268,21 @@ const MyAccountPage = () => {
                       </div>
                     )}
                     
-                    {/* Ticket grid */}
+                    {/* Ticket grid - with safety check */}
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-                      {ticketPages[activePage] && ticketPages[activePage].map((ticketNumber) => (
-                        <div
-                          key={ticketNumber}
-                          className="border border-dark-200 dark:border-dark-700 rounded-lg p-3 text-center bg-dark-50 dark:bg-dark-800"
-                        >
-                          <FiTicket className="h-5 w-5 text-primary-600 dark:text-primary-500 mx-auto mb-1" />
-                          <span className="font-mono text-dark-800 dark:text-dark-200">
-                            #{ticketNumber}
-                          </span>
-                        </div>
-                      ))}
+                      {ticketPages[activePage] && Array.isArray(ticketPages[activePage]) && 
+                        ticketPages[activePage].map((ticketNumber) => (
+                          <div
+                            key={ticketNumber}
+                            className="border border-dark-200 dark:border-dark-700 rounded-lg p-3 text-center bg-dark-50 dark:bg-dark-800"
+                          >
+                            <FiTicket className="h-5 w-5 text-primary-600 dark:text-primary-500 mx-auto mb-1" />
+                            <span className="font-mono text-dark-800 dark:text-dark-200">
+                              #{ticketNumber}
+                            </span>
+                          </div>
+                        ))
+                      }
                     </div>
                     
                     {/* Bottom pagination for mobile */}

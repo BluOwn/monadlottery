@@ -33,8 +33,12 @@ export const getNetwork = async () => {
  */
 export const isMonadTestnet = (chainId) => {
   if (!chainId) return false;
-  return chainId === MONAD_TESTNET_CONFIG.id.toString(16) || 
-         chainId === `0x${MONAD_TESTNET_CONFIG.id.toString(16)}`;
+  
+  // Create normalized versions of the chainId for comparison
+  const normalizedChainId = chainId.startsWith('0x') ? parseInt(chainId, 16).toString() : chainId;
+  const monadChainId = MONAD_TESTNET_CHAIN_ID;
+  
+  return normalizedChainId === monadChainId;
 };
 
 /**

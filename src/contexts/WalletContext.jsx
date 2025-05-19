@@ -1,14 +1,19 @@
 import React, { createContext, useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
+import { MONAD_TESTNET_CHAIN_ID, MONAD_TESTNET_CONFIG } from '../constants/contractAddresses';
+import toast from 'react-hot-toast';
 
 export const WalletContext = createContext({
   connect: async () => {},
   disconnect: () => {},
+  switchNetwork: async () => {},
   address: null,
   isConnected: false,
   provider: null,
   chainId: null,
   signer: null,
+  isConnecting: false,
+  isCorrectNetwork: false,
 });
 
 export const WalletProvider = ({ children }) => {
@@ -18,10 +23,86 @@ export const WalletProvider = ({ children }) => {
   const [chainId, setChainId] = useState(null);
   const [signer, setSigner] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isCorrectNetwork, setIsCorrectNetwork] = useState(false);
+
+  // Check if connected to correct network
+  const checkNetwork = useCallback((currentChainId) => {
+    if (!currentChainId) return false;
+    
+    // Normalize chain IDs for comparison
+    const normalizeChainId = (id) => {
+      if (typeof id === 'string') {
+        return id.startsWith('0x') ? parseInt(id, 16).toString() : id;
+      }
+      return id.toString();
+    };
+    
+    const normalizedCurrentChainId = normalizeChainId(currentChainId);
+    const normalizedTargetChainId = normalizeChainId(MONAD_TESTNET_CHAIN_ID);
+    
+    const isCorrect = normalizedCurrentChainId === normalizedTargetChainId;
+    setIsCorrectNetwork(isCorrect);
+    return isCorrect;
+  }, []);
+
+  // Switch to Monad Testnet
+  const switchNetwork = useCallback(async () => {
+    if (typeof window === 'undefined' || !window.ethereum) {
+      toast.error('No Ethereum wallet found');
+      return false;
+    }
+    
+    try {
+      setIsConnecting(true);
+      
+      // Format chainId as hex with 0x prefix
+      const chainIdHex = `0x${parseInt(MONAD_TESTNET_CHAIN_ID).toString(16)}`;
+      
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: chainIdHex }],
+      });
+      
+      toast.success('Switched to Monad Testnet');
+      return true;
+    } catch (switchError) {
+      console.error('Error switching network:', switchError);
+      
+      // This error code indicates that the chain has not been added to MetaMask
+      if (switchError.code === 4902) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [
+              {
+                chainId: `0x${parseInt(MONAD_TESTNET_CHAIN_ID).toString(16)}`,
+                chainName: MONAD_TESTNET_CONFIG.name,
+                nativeCurrency: MONAD_TESTNET_CONFIG.nativeCurrency,
+                rpcUrls: MONAD_TESTNET_CONFIG.rpcUrls.default.http,
+                blockExplorerUrls: [MONAD_TESTNET_CONFIG.blockExplorers.default.url],
+              },
+            ],
+          });
+          
+          toast.success('Monad Testnet added to your wallet');
+          return true;
+        } catch (addError) {
+          console.error('Error adding network:', addError);
+          toast.error('Could not add Monad Testnet to your wallet');
+        }
+      } else {
+        toast.error('Failed to switch network. Please try manually switching to Monad Testnet in your wallet.');
+      }
+      return false;
+    } finally {
+      setIsConnecting(false);
+    }
+  }, []);
 
   const connect = useCallback(async () => {
     if (isConnecting) return null;
     if (typeof window === 'undefined' || !window.ethereum) {
+      toast.error('No Ethereum wallet found');
       throw new Error('No Ethereum wallet found');
     }
     
@@ -47,7 +128,6 @@ export const WalletProvider = ({ children }) => {
       });
 
       // Verify we have a valid signer by trying to get its address
-      // This helps catch the "unknown account #0" error
       try {
         const signerAddress = await web3Signer.getAddress();
         if (!signerAddress) throw new Error('Could not get signer address');
@@ -62,6 +142,22 @@ export const WalletProvider = ({ children }) => {
       setChainId(chainIdHex);
       setSigner(web3Signer);
       
+      // Check if we're on the correct network
+      const isCorrect = checkNetwork(chainIdHex);
+      
+      // If not on the correct network, try to switch
+      if (!isCorrect) {
+        // We don't await this to allow the connection to complete first
+        // Then we'll attempt to switch networks
+        setTimeout(async () => {
+          try {
+            await switchNetwork();
+          } catch (switchError) {
+            console.error('Network switch after connect failed:', switchError);
+          }
+        }, 500);
+      }
+      
       return accounts[0];
     } catch (error) {
       console.error('Error connecting to wallet:', error);
@@ -71,11 +167,19 @@ export const WalletProvider = ({ children }) => {
       setProvider(null);
       setChainId(null);
       setSigner(null);
+      
+      // Show user-friendly error message
+      if (error.message.includes('User rejected')) {
+        toast.error('Connection rejected by user');
+      } else {
+        toast.error('Failed to connect wallet');
+      }
+      
       throw error;
     } finally {
       setIsConnecting(false);
     }
-  }, [isConnecting]);
+  }, [isConnecting, checkNetwork, switchNetwork]);
 
   const disconnect = useCallback(() => {
     setAddress(null);
@@ -83,6 +187,7 @@ export const WalletProvider = ({ children }) => {
     setProvider(null);
     setChainId(null);
     setSigner(null);
+    setIsCorrectNetwork(false);
   }, []);
 
   // Setup listeners for wallet events
@@ -95,11 +200,15 @@ export const WalletProvider = ({ children }) => {
         setIsConnected(true);
       } else {
         disconnect();
+        toast.info('Wallet disconnected');
       }
     };
 
     const handleChainChanged = async (chainIdHex) => {
+      // When chain changes, page will reload in most wallets
+      // But we'll handle it gracefully just in case
       setChainId(chainIdHex);
+      checkNetwork(chainIdHex);
       
       if (window.ethereum) {
         try {
@@ -124,6 +233,7 @@ export const WalletProvider = ({ children }) => {
 
     const handleDisconnect = () => {
       disconnect();
+      toast.info('Wallet disconnected');
     };
 
     // Initial connection check
@@ -144,6 +254,7 @@ export const WalletProvider = ({ children }) => {
             setProvider(web3Provider);
             setSigner(web3Signer);
             setChainId(chainIdHex);
+            checkNetwork(chainIdHex);
           } catch (err) {
             console.error('Invalid signer during initial check:', err);
             // Don't set connected state if signer is invalid
@@ -169,19 +280,21 @@ export const WalletProvider = ({ children }) => {
         window.ethereum.removeListener('disconnect', handleDisconnect);
       }
     };
-  }, [disconnect]);
+  }, [disconnect, checkNetwork]);
 
   return (
     <WalletContext.Provider
       value={{
         connect,
         disconnect,
+        switchNetwork,
         address,
         isConnected,
         provider,
         chainId,
         signer,
         isConnecting,
+        isCorrectNetwork,
       }}
     >
       {children}

@@ -3,9 +3,10 @@ import { ethers } from 'ethers';
 import { useWallet } from './useWallet';
 import MonadLotteryABI from '../abis/MonadLottery.json';
 import { MONAD_LOTTERY_CONTRACT_ADDRESS } from '../constants/contractAddresses';
+import toast from 'react-hot-toast';
 
 export const useLottery = () => {
-  const { signer, provider, address, isConnected } = useWallet();
+  const { signer, provider, address, isConnected, isCorrectNetwork } = useWallet();
   const [contract, setContract] = useState(null);
   const [lotteryStatus, setLotteryStatus] = useState({
     isActive: false,
@@ -23,6 +24,13 @@ export const useLottery = () => {
     address: null,
     ticketCount: 0,
   });
+  
+  // Helper to clear error after a timeout
+  const clearErrorAfterDelay = useCallback((delay = 5000) => {
+    setTimeout(() => {
+      setError(null);
+    }, delay);
+  }, []);
   
   // Safe fetch wrapper to prevent uncaught promise rejections
   const safeFetch = async (fetchFunction) => {
@@ -159,6 +167,7 @@ export const useLottery = () => {
       console.error('Error fetching lottery status:', err);
       if (isMounted) {
         setError('Failed to fetch lottery status');
+        clearErrorAfterDelay();
       }
       return null;
     } finally {
@@ -166,7 +175,7 @@ export const useLottery = () => {
         setLoading(false);
       }
     }
-  }, [contract]);
+  }, [contract, clearErrorAfterDelay]);
   
   // Fetch ticket price
   const fetchTicketPrice = useCallback(async () => {
@@ -187,10 +196,11 @@ export const useLottery = () => {
       console.error('Error fetching ticket price:', err);
       if (isMounted) {
         setError('Failed to fetch ticket price');
+        clearErrorAfterDelay();
       }
       return null;
     }
-  }, [contract]);
+  }, [contract, clearErrorAfterDelay]);
   
   // Fetch user tickets
   const fetchUserTickets = useCallback(async () => {
@@ -237,6 +247,7 @@ export const useLottery = () => {
       console.error('Error fetching user tickets:', err);
       if (isMounted) {
         setError('Failed to fetch your tickets');
+        clearErrorAfterDelay();
         // Reset to empty state on error
         setUserTickets([]);
         setUserTicketCount(0);
@@ -247,17 +258,63 @@ export const useLottery = () => {
         setLoading(false);
       }
     }
-  }, [contract, address]);
+  }, [contract, address, clearErrorAfterDelay]);
+  
+  // Check balance before buying tickets
+  const checkBalanceForPurchase = useCallback(async (totalCostInMON) => {
+    if (!signer) return false;
+    
+    try {
+      const balance = await signer.getBalance();
+      const totalCostWei = ethers.utils.parseEther(totalCostInMON);
+      
+      // Add a buffer for gas (1% of transaction cost or 0.001 MON, whichever is higher)
+      const gasCostEstimate = totalCostWei.mul(1).div(100); // 1% buffer
+      const minGasCost = ethers.utils.parseEther('0.001'); // Minimum 0.001 MON
+      const gasCost = gasCostEstimate.gt(minGasCost) ? gasCostEstimate : minGasCost;
+      
+      const totalRequired = totalCostWei.add(gasCost);
+      
+      if (balance.lt(totalRequired)) {
+        const balanceInMON = ethers.utils.formatEther(balance);
+        const requiredInMON = ethers.utils.formatEther(totalRequired);
+        setError(`Insufficient funds: You have ${parseFloat(balanceInMON).toFixed(4)} MON, but need at least ${parseFloat(requiredInMON).toFixed(4)} MON (including gas).`);
+        clearErrorAfterDelay(8000);
+        return false;
+      }
+      
+      return true;
+    } catch (err) {
+      console.error('Error checking balance:', err);
+      setError('Could not verify your balance. Please ensure you have enough MON.');
+      clearErrorAfterDelay();
+      return false;
+    }
+  }, [signer, clearErrorAfterDelay]);
   
   // Buy tickets
   const buyTickets = useCallback(async (numTickets) => {
     if (!contract || !isConnected) {
       setError('Wallet not connected');
+      toast.error('Wallet not connected');
+      return false;
+    }
+    
+    if (!isCorrectNetwork) {
+      setError('Please switch to Monad Testnet');
+      toast.error('Please switch to Monad Testnet');
       return false;
     }
     
     if (!numTickets || numTickets <= 0) {
       setError('Invalid number of tickets');
+      toast.error('Invalid number of tickets');
+      return false;
+    }
+    
+    if (!lotteryStatus.isActive) {
+      setError('Lottery is not active');
+      toast.error('Lottery is not active');
       return false;
     }
     
@@ -273,6 +330,13 @@ export const useLottery = () => {
       
       // Calculate total cost with proper string manipulation to avoid floating point issues
       const totalCost = (ticketPriceFloat * numTickets).toFixed(18);
+      
+      // Check if user has sufficient balance
+      const hasSufficientBalance = await checkBalanceForPurchase(totalCost);
+      if (!hasSufficientBalance) {
+        return false;
+      }
+      
       const value = ethers.utils.parseEther(totalCost);
       
       // Check if we have a valid value
@@ -280,14 +344,52 @@ export const useLottery = () => {
         throw new Error('Invalid transaction value');
       }
       
-      const tx = await contract.buyTickets(numTickets, { value });
+      // Show pending toast
+      const pendingToast = toast.loading(`Buying ${numTickets} ticket${numTickets > 1 ? 's' : ''}...`);
+      
+      // Estimate gas to catch potential errors before sending transaction
+      let gasEstimate;
+      try {
+        gasEstimate = await contract.estimateGas.buyTickets(numTickets, { value });
+        // Add 20% buffer to gas estimate
+        gasEstimate = gasEstimate.mul(120).div(100);
+      } catch (gasError) {
+        toast.dismiss(pendingToast);
+        console.error('Gas estimation error:', gasError);
+        
+        // Check for specific error messages
+        if (gasError.message.includes('execution reverted')) {
+          const reason = gasError.message.includes('reason:') 
+            ? gasError.message.split('reason:')[1].trim() 
+            : 'Transaction would fail';
+          throw new Error(`Transaction would fail: ${reason}`);
+        }
+        
+        throw new Error('Failed to estimate gas. Transaction may fail.');
+      }
+      
+      // Send transaction with gas estimate
+      const tx = await contract.buyTickets(numTickets, { 
+        value,
+        gasLimit: gasEstimate
+      });
+      
+      // Update toast to show transaction hash
+      toast.loading(
+        `Transaction submitted. Waiting for confirmation...\nHash: ${tx.hash.substring(0, 10)}...`,
+        { id: pendingToast }
+      );
       
       // Wait for transaction confirmation
       const receipt = await tx.wait();
       
       if (!receipt || !isMounted) {
+        toast.dismiss(pendingToast);
         return false;
       }
+      
+      // Success toast
+      toast.success(`Successfully purchased ${numTickets} ticket${numTickets > 1 ? 's' : ''}!`, { id: pendingToast });
       
       // Refresh data after purchase - catch errors individually to prevent complete failure
       try {
@@ -308,14 +410,56 @@ export const useLottery = () => {
       return true;
     } catch (err) {
       console.error('Error buying tickets:', err);
-      const errorMessage = err.message || 'Transaction failed';
-      // Extract more user-friendly message from ethers error if available
-      const friendlyMessage = errorMessage.includes(':') 
-        ? errorMessage.split(':')[1].trim() 
-        : errorMessage;
+      
+      // Handle various error types
+      let errorMessage = 'Transaction failed';
+      
+      if (typeof err === 'object' && err !== null) {
+        // Check for common error patterns
+        if (err.message) {
+          if (err.message.includes('insufficient funds')) {
+            errorMessage = 'Insufficient funds. Please make sure you have enough MON tokens.';
+          } else if (err.message.includes('user rejected')) {
+            errorMessage = 'Transaction rejected by user';
+          } else if (err.message.includes('gas required exceeds')) {
+            errorMessage = 'The transaction would require too much gas. Try buying fewer tickets.';
+          } else if (err.message.includes('execution reverted')) {
+            // Extract the revert reason if available
+            const reasonMatch = err.message.match(/reason="([^"]+)"/);
+            if (reasonMatch && reasonMatch[1]) {
+              errorMessage = `Smart contract error: ${reasonMatch[1]}`;
+            } else {
+              errorMessage = 'Transaction reverted by the smart contract';
+            }
+          } else {
+            // Extract a more user-friendly message from ethers error if available
+            errorMessage = err.message.includes(':') 
+              ? err.message.split(':')[1].trim() 
+              : err.message;
+            
+            // Limit the length of the error message
+            if (errorMessage.length > 100) {
+              errorMessage = errorMessage.substring(0, 100) + '...';
+            }
+          }
+        }
+        
+        // Check for error code
+        if (err.code) {
+          if (err.code === 'INSUFFICIENT_FUNDS') {
+            errorMessage = 'Insufficient funds. Please make sure you have enough MON tokens.';
+          } else if (err.code === 'UNPREDICTABLE_GAS_LIMIT') {
+            errorMessage = 'Could not estimate gas. The transaction might fail.';
+          }
+        }
+      }
+      
+      // Show error toast
+      toast.error(`Failed to buy tickets: ${errorMessage}`);
       
       if (isMounted) {
-        setError(`Failed to buy tickets: ${friendlyMessage}`);
+        setError(`Failed to buy tickets: ${errorMessage}`);
+        clearErrorAfterDelay(8000);
       }
       return false;
     } finally {
@@ -323,7 +467,17 @@ export const useLottery = () => {
         setLoading(false);
       }
     }
-  }, [contract, isConnected, ticketPrice, fetchLotteryStatus, fetchUserTickets]);
+  }, [
+    contract, 
+    isConnected, 
+    isCorrectNetwork,
+    ticketPrice, 
+    lotteryStatus, 
+    fetchLotteryStatus, 
+    fetchUserTickets, 
+    checkBalanceForPurchase,
+    clearErrorAfterDelay
+  ]);
   
   // Initial data fetching
   useEffect(() => {
@@ -347,6 +501,7 @@ export const useLottery = () => {
         console.error('Error fetching initial data:', err);
         if (isMounted) {
           setError('Failed to load lottery data');
+          clearErrorAfterDelay();
         }
       } finally {
         if (isMounted) {
@@ -360,7 +515,7 @@ export const useLottery = () => {
     return () => {
       isMounted = false;
     };
-  }, [contract, fetchLotteryStatus, fetchTicketPrice]);
+  }, [contract, fetchLotteryStatus, fetchTicketPrice, clearErrorAfterDelay]);
   
   // Fetch user's tickets when connected
   useEffect(() => {
@@ -383,6 +538,20 @@ export const useLottery = () => {
       isMounted = false;
     };
   }, [contract, address, fetchUserTickets]);
+  
+  // Set up a periodic refresh of lottery status
+  useEffect(() => {
+    if (!contract) return;
+    
+    // Refresh every 30 seconds
+    const intervalId = setInterval(() => {
+      fetchLotteryStatus().catch(err => {
+        console.error('Error in auto-refresh:', err);
+      });
+    }, 30000);
+    
+    return () => clearInterval(intervalId);
+  }, [contract, fetchLotteryStatus]);
   
   return {
     lotteryStatus: lotteryStatus || {
