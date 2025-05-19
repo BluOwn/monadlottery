@@ -1,12 +1,9 @@
 import React, { useState } from 'react';
-import { FiSearch, FiTicket } from 'react-icons/fi';
 import { ethers } from 'ethers';
-import toast from 'react-hot-toast';
-import Card from '../shared/Card';
-import LoadingSpinner from '../shared/LoadingSpinner';
 import { MONAD_LOTTERY_CONTRACT_ADDRESS } from '../../constants/contractAddresses';
 import MonadLotteryABI from '../../abis/MonadLottery.json';
 
+// Extremely simplified version with no component dependencies
 const WalletChecker = () => {
   const [address, setAddress] = useState('');
   const [ticketCount, setTicketCount] = useState(null);
@@ -74,7 +71,7 @@ const WalletChecker = () => {
   };
   
   return (
-    <Card className="mt-16">
+    <div className="bg-white dark:bg-dark-800 rounded-xl shadow-lg p-6 mt-16">
       <h2 className="text-2xl font-bold text-dark-900 dark:text-white mb-4">
         Check Wallet Tickets
       </h2>
@@ -103,11 +100,10 @@ const WalletChecker = () => {
             disabled={isLoading}
           >
             {isLoading ? (
-              <LoadingSpinner size="sm" />
+              <span>Loading...</span>
             ) : (
-              <FiSearch className="h-5 w-5" />
+              <span>Check</span>
             )}
-            <span>Check</span>
           </button>
         </div>
       </form>
@@ -122,12 +118,6 @@ const WalletChecker = () => {
       {ticketCount !== null && !error && (
         <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 
           dark:border-green-800 rounded-lg p-6 text-center">
-          <div className="flex justify-center mb-4">
-            <div className="p-3 rounded-full bg-green-100 dark:bg-green-800">
-              <FiTicket className="h-8 w-8 text-green-600 dark:text-green-400" />
-            </div>
-          </div>
-          
           <h3 className="text-xl font-bold text-dark-900 dark:text-white mb-2">
             Wallet Tickets
           </h3>
@@ -143,7 +133,7 @@ const WalletChecker = () => {
           </p>
         </div>
       )}
-    </Card>
+    </div>
   );
 };
 
