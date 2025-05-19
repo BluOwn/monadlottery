@@ -5,13 +5,14 @@ import { MONAD_TESTNET_CHAIN_ID, MONAD_TESTNET_CONFIG } from '../constants/contr
 
 // Helper for normalizing chain IDs
 const normalizeChainId = (id) => {
+  if (!id) return '';
   if (typeof id === 'string') {
     return id.startsWith('0x') ? parseInt(id, 16).toString() : id;
   }
   return id.toString();
 };
 
-// Create wallet store
+// Create wallet store with default values and safety checks
 const useWalletStore = create((set, get) => ({
   address: null,
   isConnected: false,
@@ -21,10 +22,20 @@ const useWalletStore = create((set, get) => ({
   isConnecting: false,
   isCorrectNetwork: false,
   error: null,
+  initialized: false, // Track if the wallet has been initialized
 
   // Initialize wallet from local storage or session
   initWallet: async () => {
-    if (typeof window === 'undefined' || !window.ethereum) return;
+    if (typeof window === 'undefined') {
+      set({ initialized: true });
+      return;
+    }
+    
+    // Skip if already initialized or no ethereum provider
+    if (get().initialized || !window.ethereum) {
+      set({ initialized: true });
+      return;
+    }
     
     try {
       const accounts = await window.ethereum.request({ method: 'eth_accounts' });
@@ -36,32 +47,45 @@ const useWalletStore = create((set, get) => ({
         
         // Verify signer is valid
         try {
-          await web3Signer.getAddress();
-          set({
-            address: accounts[0],
-            isConnected: true,
-            provider: web3Provider,
-            signer: web3Signer,
-            chainId: chainIdHex,
-          });
+          const signerAddress = await web3Signer.getAddress();
           
-          // Check network
-          const normalizedChainId = normalizeChainId(chainIdHex);
-          const normalizedTargetChainId = normalizeChainId(MONAD_TESTNET_CHAIN_ID);
-          set({ isCorrectNetwork: normalizedChainId === normalizedTargetChainId });
+          // Only set connected state if we have a valid address
+          if (signerAddress) {
+            set({
+              address: accounts[0],
+              isConnected: true,
+              provider: web3Provider,
+              signer: web3Signer,
+              chainId: chainIdHex,
+              initialized: true
+            });
+            
+            // Check network
+            const normalizedChainId = normalizeChainId(chainIdHex);
+            const normalizedTargetChainId = normalizeChainId(MONAD_TESTNET_CHAIN_ID);
+            set({ isCorrectNetwork: normalizedChainId === normalizedTargetChainId });
+          } else {
+            set({ initialized: true });
+          }
         } catch (err) {
           console.error('Invalid signer during initial check:', err);
+          set({ initialized: true });
         }
+      } else {
+        set({ initialized: true });
       }
     } catch (err) {
       console.error('Error checking wallet connection:', err);
+      set({ initialized: true });
     }
   },
 
   // Connect wallet
   connect: async () => {
     if (get().isConnecting) return null;
-    if (typeof window === 'undefined' || !window.ethereum) {
+    if (typeof window === 'undefined') return null;
+    
+    if (!window.ethereum) {
       toast.error('No Ethereum wallet found');
       return null;
     }
@@ -103,6 +127,7 @@ const useWalletStore = create((set, get) => ({
         provider: web3Provider,
         signer: web3Signer,
         chainId: chainIdHex,
+        initialized: true
       });
       
       // Check network
@@ -215,7 +240,9 @@ const useWalletStore = create((set, get) => ({
 
   // Update on account or chain changes
   setupEventListeners: () => {
-    if (typeof window === 'undefined' || !window.ethereum) return;
+    if (typeof window === 'undefined' || !window.ethereum) {
+      return () => {}; // Return a no-op cleanup function
+    }
     
     const handleAccountsChanged = (accounts) => {
       if (accounts && accounts.length > 0) {
@@ -252,17 +279,29 @@ const useWalletStore = create((set, get) => ({
       }
     };
 
+    const handleDisconnect = () => {
+      get().disconnect();
+    };
+
     // Set up event listeners
-    window.ethereum.on('accountsChanged', handleAccountsChanged);
-    window.ethereum.on('chainChanged', handleChainChanged);
-    window.ethereum.on('disconnect', get().disconnect);
+    try {
+      window.ethereum.on('accountsChanged', handleAccountsChanged);
+      window.ethereum.on('chainChanged', handleChainChanged);
+      window.ethereum.on('disconnect', handleDisconnect);
+    } catch (err) {
+      console.error('Error setting up event listeners:', err);
+    }
 
     // Return cleanup function
     return () => {
-      if (window.ethereum.removeListener) {
-        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-        window.ethereum.removeListener('chainChanged', handleChainChanged);
-        window.ethereum.removeListener('disconnect', get().disconnect);
+      if (window.ethereum && window.ethereum.removeListener) {
+        try {
+          window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+          window.ethereum.removeListener('chainChanged', handleChainChanged);
+          window.ethereum.removeListener('disconnect', handleDisconnect);
+        } catch (err) {
+          console.error('Error removing event listeners:', err);
+        }
       }
     };
   },

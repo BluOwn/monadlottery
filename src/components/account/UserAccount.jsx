@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FiTicket, FiAward, FiAlertTriangle, FiRefreshCw } from 'react-icons/fi';
 import { useWallet } from '../../hooks/useWallet';
 import { useLottery } from '../../hooks/useLottery';
@@ -80,7 +80,7 @@ const AccountOverview = ({ address, userTicketCount, topBuyer, isTopBuyer }) => 
               Wallet Address
             </span>
             <span className="font-mono text-dark-800 dark:text-dark-200">
-              {address}
+              {address || 'Not available'}
             </span>
           </div>
           
@@ -89,13 +89,13 @@ const AccountOverview = ({ address, userTicketCount, topBuyer, isTopBuyer }) => 
               Total Tickets Purchased
             </span>
             <span className="text-lg font-bold text-dark-800 dark:text-dark-200">
-              {userTicketCount}
+              {userTicketCount || 0}
             </span>
           </div>
         </div>
         
         <div>
-          {isTopBuyer && (
+          {isTopBuyer && topBuyer && (
             <div className="flex items-center gap-3 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded-lg p-4">
               <div className="p-2 bg-amber-200 dark:bg-amber-800 rounded-full">
                 <FiAward className="h-6 w-6 text-amber-700 dark:text-amber-300" />
@@ -105,20 +105,20 @@ const AccountOverview = ({ address, userTicketCount, topBuyer, isTopBuyer }) => 
                   Top Buyer
                 </h3>
                 <p className="text-sm text-amber-700 dark:text-amber-400">
-                  Congratulations! You are currently the top buyer with {topBuyer.ticketCount} tickets!
+                  Congratulations! You are currently the top buyer with {topBuyer.ticketCount || 0} tickets!
                 </p>
               </div>
             </div>
           )}
           
-          {!isTopBuyer && topBuyer.address && (
+          {!isTopBuyer && topBuyer && topBuyer.address && (
             <div className="space-y-3">
               <div>
                 <span className="text-sm text-dark-500 dark:text-dark-400 block mb-1">
                   Current Top Buyer
                 </span>
                 <span className="font-medium text-dark-800 dark:text-dark-200">
-                  {formatAddress(topBuyer.address)} with {topBuyer.ticketCount} tickets
+                  {formatAddress(topBuyer.address)} with {topBuyer.ticketCount || 0} tickets
                 </span>
               </div>
               
@@ -128,7 +128,7 @@ const AccountOverview = ({ address, userTicketCount, topBuyer, isTopBuyer }) => 
                     Tickets Needed to Become Top Buyer
                   </span>
                   <span className="text-lg font-bold text-primary-600 dark:text-primary-500">
-                    {topBuyer.ticketCount - userTicketCount + 1}
+                    {(topBuyer.ticketCount || 0) - userTicketCount + 1}
                   </span>
                 </div>
               )}
@@ -155,7 +155,17 @@ const UserAccount = () => {
   
   const [activePage, setActivePage] = useState(0);
   
-  // Group tickets by page for easier viewing
+  // Refresh data on mount - using an empty dependency array to run only once
+  useEffect(() => {
+    // Only attempt to refresh if connected and refreshUserTickets is available
+    if (isConnected && refreshUserTickets) {
+      refreshUserTickets().catch(error => {
+        console.error('Error refreshing user tickets:', error);
+      });
+    }
+  }, []); // Empty dependency array - this effect runs only once on mount
+  
+  // Group tickets by page for easier viewing (with safely handling potential undefined)
   const ticketsPerPage = 50;
   const ticketPages = [];
   
@@ -165,11 +175,11 @@ const UserAccount = () => {
     }
   }
   
-  // Check if user is the top buyer
+  // Check if user is the top buyer (with safety checks)
   const isTopBuyer = address && topBuyer?.address === address;
   
   const handleRefresh = () => {
-    if (!isConnected) return;
+    if (!isConnected || !refreshUserTickets) return;
     
     toast.promise(
       refreshUserTickets(),
@@ -235,13 +245,13 @@ const UserAccount = () => {
       {/* Account Overview */}
       <AccountOverview 
         address={address}
-        userTicketCount={userTicketCount}
-        topBuyer={topBuyer}
-        isTopBuyer={isTopBuyer}
+        userTicketCount={userTicketCount || 0}
+        topBuyer={topBuyer || { address: null, ticketCount: 0 }}
+        isTopBuyer={!!isTopBuyer}
       />
       
       {/* Ticket List */}
-      <Card title={`My Tickets (${userTicketCount})`}>
+      <Card title={`My Tickets (${userTicketCount || 0})`}>
         <div className="flex items-center justify-between mb-4">
           <div></div> {/* Empty div to maintain space for flex layout */}
           
