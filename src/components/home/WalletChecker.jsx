@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { ethers } from 'ethers';
-import { MONAD_LOTTERY_CONTRACT_ADDRESS } from '../../constants/contractAddresses';
-import MonadLotteryABI from '../../abis/MonadLottery.json';
 
-// Extremely simplified version with no component dependencies
+// Super simple WalletChecker component with no external dependencies
 const WalletChecker = () => {
   const [address, setAddress] = useState('');
   const [ticketCount, setTicketCount] = useState(null);
@@ -34,23 +32,48 @@ const WalletChecker = () => {
     setIsLoading(true);
     
     try {
+      // Use the contract data from your environment variables
+      const contractAddress = '0xC9105a5DDDF4605C98712568cF2AA0367f6AaBA2';
+      
+      // Simple ABI just for getUserTicketCount
+      const abi = [
+        "function getUserTicketCount(address user) view returns (uint256)"
+      ];
+      
       // Connect to provider
       const provider = new ethers.providers.JsonRpcProvider("https://testnet-rpc.monad.xyz/");
       
       // Create contract instance
       const contract = new ethers.Contract(
-        MONAD_LOTTERY_CONTRACT_ADDRESS,
-        MonadLotteryABI,
+        contractAddress,
+        abi,
         provider
       );
       
-      // Get user ticket count
-      const count = await contract.getUserTicketCount(address);
-      setTicketCount(count.toNumber());
+      // Add a timeout to the request
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Request timed out')), 10000);
+      });
+      
+      // Get user ticket count with timeout
+      const result = await Promise.race([
+        contract.getUserTicketCount(address),
+        timeoutPromise
+      ]);
+      
+      // Convert result to number
+      const count = typeof result === 'object' ? result.toNumber() : Number(result);
+      setTicketCount(count);
       
     } catch (err) {
       console.error('Error checking tickets:', err);
-      setError('Failed to fetch ticket information. Please try again.');
+      if (err.message && err.message.includes('429')) {
+        setError('Network is busy. Please try again in a moment.');
+      } else if (err.message && err.message.includes('timeout')) {
+        setError('Request timed out. Network may be congested.');
+      } else {
+        setError('Failed to fetch ticket information. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }

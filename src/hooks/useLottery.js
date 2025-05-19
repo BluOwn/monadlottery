@@ -5,46 +5,116 @@ import { useWallet } from './useWallet';
 import MonadLotteryABI from '../abis/MonadLottery.json';
 import { MONAD_LOTTERY_CONTRACT_ADDRESS } from '../constants/contractAddresses';
 
-// RPC fallback URLs
+// Multiple RPC providers with fallbacks
 const RPC_URLS = [
   "https://testnet-rpc.monad.xyz/",
-  "https://rpc.sepolia.org", // Backup provider - note: may not work with Monad, just an example
-  // Add more fallback URLs if available
+  // Add fallback URLs if you have them
 ];
 
-// Helper for creating providers with exponential backoff
-const createProviderWithRetry = async (urls, maxRetries = 3) => {
-  let lastError = null;
+// Request throttling settings
+const THROTTLE = {
+  maxRequestsPerSecond: 5, // Set below the 10/sec limit
+  requestQueue: [],
+  processing: false,
+  lastRequestTime: 0
+};
+
+// Process the request queue with throttling
+const processQueue = async () => {
+  if (THROTTLE.processing || THROTTLE.requestQueue.length === 0) return;
   
-  for (let i = 0; i < maxRetries; i++) {
-    for (const url of urls) {
+  THROTTLE.processing = true;
+  
+  try {
+    // Calculate time since last request
+    const now = Date.now();
+    const timeSinceLastRequest = now - THROTTLE.lastRequestTime;
+    
+    // If we need to wait to respect rate limit, wait the appropriate time
+    if (THROTTLE.lastRequestTime > 0 && timeSinceLastRequest < (1000 / THROTTLE.maxRequestsPerSecond)) {
+      const waitTime = (1000 / THROTTLE.maxRequestsPerSecond) - timeSinceLastRequest;
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
+    // Take the next request from the queue
+    const nextRequest = THROTTLE.requestQueue.shift();
+    
+    if (nextRequest) {
+      THROTTLE.lastRequestTime = Date.now();
+      
       try {
-        const provider = new ethers.providers.JsonRpcProvider(url);
-        // Test the provider with a basic call
-        await provider.getBlockNumber();
-        return provider;
-      } catch (err) {
-        console.warn(`Provider ${url} failed:`, err);
-        lastError = err;
-        // Wait with exponential backoff before trying next
-        await new Promise(r => setTimeout(r, 500 * Math.pow(2, i)));
+        // Execute the request
+        const result = await nextRequest.fn();
+        nextRequest.resolve(result);
+      } catch (error) {
+        nextRequest.reject(error);
       }
     }
+  } finally {
+    THROTTLE.processing = false;
+    
+    // Continue processing queue if there are more items
+    if (THROTTLE.requestQueue.length > 0) {
+      setTimeout(processQueue, 1000 / THROTTLE.maxRequestsPerSecond);
+    }
   }
+};
+
+// Throttled RPC call - adds request to queue
+const throttledRpcCall = (fn) => {
+  return new Promise((resolve, reject) => {
+    // Add to queue
+    THROTTLE.requestQueue.push({ fn, resolve, reject });
+    
+    // Start processing queue if not already in progress
+    if (!THROTTLE.processing) {
+      processQueue();
+    }
+  });
+};
+
+// Create a provider with retry mechanism and throttling
+const createProvider = async (url) => {
+  const provider = new ethers.providers.JsonRpcProvider(url);
   
-  throw new Error(`All providers failed after ${maxRetries} attempts. Last error: ${lastError?.message}`);
+  // Create a wrapper around the provider's call method
+  const originalCall = provider.call;
+  provider.call = async function(...args) {
+    return throttledRpcCall(() => originalCall.apply(provider, args));
+  };
+  
+  // Similarly wrap other commonly used methods
+  const methods = ['getBalance', 'getTransactionCount', 'getCode', 'getStorageAt'];
+  methods.forEach(method => {
+    const original = provider[method];
+    if (typeof original === 'function') {
+      provider[method] = async function(...args) {
+        return throttledRpcCall(() => original.apply(provider, args));
+      };
+    }
+  });
+  
+  // Test the provider with a basic call
+  try {
+    await throttledRpcCall(() => provider.getBlockNumber());
+    return provider;
+  } catch (error) {
+    console.error(`Provider ${url} failed:`, error);
+    throw error;
+  }
 };
 
 export const useLottery = () => {
-  const { signer, provider, address, isConnected, isCorrectNetwork } = useWallet();
+  const { signer, provider: walletProvider, address, isConnected, isCorrectNetwork } = useWallet();
   const [contract, setContract] = useState(null);
+  const [readProvider, setReadProvider] = useState(null);
   const [lotteryStatus, setLotteryStatus] = useState({
     isActive: false,
     totalTickets: 0,
     totalPoolAmount: '0',
     rewardsDistributed: false,
   });
-  const [ticketPrice, setTicketPrice] = useState('0.01'); // Default to 0.01 MON
+  const [ticketPrice, setTicketPrice] = useState('0.01');
   const [userTickets, setUserTickets] = useState([]);
   const [userTicketCount, setUserTicketCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -61,45 +131,52 @@ export const useLottery = () => {
     }, delay);
   }, []);
   
-  // Setup contract instance with fallback providers
+  // Initialize throttled provider
+  useEffect(() => {
+    let isMounted = true;
+    
+    const init = async () => {
+      try {
+        // Create a throttled provider
+        const provider = await createProvider(RPC_URLS[0]);
+        
+        if (isMounted) {
+          setReadProvider(provider);
+        }
+      } catch (err) {
+        console.error('Failed to initialize provider:', err);
+        if (isMounted) {
+          setError('Failed to connect to network. Please try again later.');
+        }
+      }
+    };
+    
+    init();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+  
+  // Setup contract instance
   useEffect(() => {
     let isMounted = true;
     
     const initContract = async () => {
-      if (!provider && !isConnected) {
-        // If no provider from wallet, create a read-only provider
-        try {
-          const fallbackProvider = await createProviderWithRetry(RPC_URLS);
-          
-          if (isMounted) {
-            const contractRead = new ethers.Contract(
-              MONAD_LOTTERY_CONTRACT_ADDRESS,
-              MonadLotteryABI,
-              fallbackProvider
-            );
-            
-            setContract(contractRead);
-            setError(null);
-          }
-        } catch (err) {
-          console.error('Failed to create fallback provider:', err);
-          if (isMounted) {
-            setError('Failed to connect to blockchain. Please try again later.');
-          }
-        }
-        return;
-      }
+      // Use wallet provider if available, otherwise use read provider
+      const providerToUse = walletProvider || readProvider;
+      
+      if (!providerToUse) return;
       
       try {
-        // Create contract with user's provider
         const contractInstance = new ethers.Contract(
           MONAD_LOTTERY_CONTRACT_ADDRESS,
           MonadLotteryABI,
-          provider
+          providerToUse
         );
         
         // If we have a signer, create a writable contract
-        const contractWithSigner = signer 
+        const contractWithSigner = (signer && isConnected) 
           ? contractInstance.connect(signer)
           : contractInstance;
         
@@ -121,61 +198,34 @@ export const useLottery = () => {
     return () => {
       isMounted = false;
     };
-  }, [provider, signer, isConnected, clearErrorAfterDelay]);
+  }, [walletProvider, readProvider, signer, isConnected, clearErrorAfterDelay]);
   
-  // Function to safely call contract methods with rate limit handling
+  // Function to safely call contract methods with throttling
   const safeContractCall = async (method, ...args) => {
     if (!contract) {
       throw new Error('Contract not initialized');
     }
     
-    try {
-      // First try with the regular contract
-      return await contract[method](...args);
-    } catch (err) {
-      // Check if this is a rate limit error
-      if (
-        err.message.includes('rate limit') ||
-        err.message.includes('request limit') ||
-        err.message.includes('429') ||
-        err.message.includes('too many requests')
-      ) {
-        console.warn('Rate limit hit, trying fallback provider', err);
-        
-        try {
-          // Create a new provider and contract instance
-          const fallbackProvider = await createProviderWithRetry(RPC_URLS);
-          const fallbackContract = new ethers.Contract(
-            MONAD_LOTTERY_CONTRACT_ADDRESS,
-            MonadLotteryABI,
-            fallbackProvider
-          );
-          
-          // If we need a signer and have one, connect it
-          const contractToUse = (method === 'buyTickets' && signer) 
-            ? fallbackContract.connect(signer)
-            : fallbackContract;
-          
-          // Retry the call with the fallback
-          return await contractToUse[method](...args);
-        } catch (fallbackErr) {
-          console.error('Fallback provider also failed:', fallbackErr);
-          throw new Error(`Rate limit exceeded and fallback failed: ${fallbackErr.message}`);
-        }
+    // Use throttled calls to avoid rate limiting
+    return throttledRpcCall(async () => {
+      try {
+        // Call the contract method
+        return await contract[method](...args);
+      } catch (err) {
+        console.error(`Error calling ${method}:`, err);
+        throw err;
       }
-      
-      // Not a rate limit error, rethrow
-      throw err;
-    }
+    });
   };
   
-  // Fetch lottery status with retry
+  // Fetch lottery status
   const fetchLotteryStatus = useCallback(async () => {
     if (!contract) return null;
     
     setLoading(true);
     
     try {
+      // Get lottery status with throttling
       const status = await safeContractCall('getLotteryStatus');
       
       if (!status) return null;
@@ -187,6 +237,7 @@ export const useLottery = () => {
         rewardsDistributed: status.awarded || false,
       });
       
+      // Get top buyer with throttling
       try {
         const topBuyerData = await safeContractCall('getTopBuyer');
         
@@ -241,37 +292,44 @@ export const useLottery = () => {
     setLoading(true);
     
     try {
-      // Try to get tickets and count in parallel
-      const [ticketsResult, ticketCountResult] = await Promise.all([
-        safeContractCall('getUserTickets', address),
-        safeContractCall('getUserTicketCount', address)
-      ]);
+      // Use sequential fetch with throttling to avoid rate limits
+      const ticketCountResult = await safeContractCall('getUserTicketCount', address);
       
-      if (ticketsResult) {
-        const processedTickets = ticketsResult.map(t => {
-          try {
-            return t.toNumber();
-          } catch (e) {
-            return Number(t.toString());
-          }
-        });
-        setUserTickets(processedTickets);
-      } else {
-        setUserTickets([]);
-      }
-      
+      let ticketCount = 0;
       if (ticketCountResult) {
         try {
-          setUserTicketCount(ticketCountResult.toNumber());
+          ticketCount = ticketCountResult.toNumber();
+          setUserTicketCount(ticketCount);
         } catch (e) {
-          setUserTicketCount(Number(ticketCountResult.toString()));
+          ticketCount = Number(ticketCountResult.toString());
+          setUserTicketCount(ticketCount);
         }
       } else {
         setUserTicketCount(0);
       }
       
+      // Only fetch tickets if there are any
+      if (ticketCount > 0) {
+        const ticketsResult = await safeContractCall('getUserTickets', address);
+        
+        if (ticketsResult) {
+          const processedTickets = ticketsResult.map(t => {
+            try {
+              return t.toNumber();
+            } catch (e) {
+              return Number(t.toString());
+            }
+          });
+          setUserTickets(processedTickets);
+        } else {
+          setUserTickets([]);
+        }
+      } else {
+        setUserTickets([]);
+      }
+      
       setError(null);
-      return { tickets: ticketsResult, count: ticketCountResult };
+      return { count: ticketCount, tickets: userTickets };
     } catch (err) {
       console.error('Error fetching user tickets:', err);
       setError('Failed to fetch your tickets. The network may be congested.');
@@ -284,7 +342,7 @@ export const useLottery = () => {
     }
   }, [contract, address, clearErrorAfterDelay]);
   
-  // Buy tickets with enhanced reliability
+  // Buy tickets with backoff strategy for rate limits
   const buyTickets = useCallback(async (numTickets) => {
     if (!contract || !isConnected) {
       setError('Wallet not connected');
@@ -304,6 +362,13 @@ export const useLottery = () => {
       return false;
     }
     
+    // NEW: Limit number of tickets per transaction to 10
+    if (numTickets > 10) {
+      setError('Maximum 10 tickets per transaction');
+      toast.error('Maximum 10 tickets per transaction');
+      return false;
+    }
+    
     if (!lotteryStatus.isActive) {
       setError('Lottery is not active');
       toast.error('Lottery is not active');
@@ -313,109 +378,81 @@ export const useLottery = () => {
     setLoading(true);
     
     try {
-      // Calculate total cost
-      const ticketPriceFloat = parseFloat(ticketPrice);
-      if (isNaN(ticketPriceFloat) || ticketPriceFloat <= 0) {
-        throw new Error('Invalid ticket price');
+      // FIXED: Use BigNumber math for precise calculations instead of floating point
+      // First get the ticket price in wei
+      const ticketPriceWei = await safeContractCall('TICKET_PRICE');
+      
+      if (!ticketPriceWei) {
+        throw new Error('Could not get ticket price from contract');
       }
       
-      const totalCost = (ticketPriceFloat * numTickets).toFixed(18);
-      const value = ethers.utils.parseEther(totalCost);
+      // Calculate total cost using BigNumber math (no floating point errors)
+      const totalCostWei = ticketPriceWei.mul(numTickets);
+      
+      // Log the values for debugging
+      console.log('Ticket price (wei):', ticketPriceWei.toString());
+      console.log('Number of tickets:', numTickets);
+      console.log('Total cost (wei):', totalCostWei.toString());
+      console.log('Total cost (ETH):', ethers.utils.formatEther(totalCostWei));
       
       // Show pending toast
       const pendingToast = toast.loading(`Buying ${numTickets} ticket${numTickets > 1 ? 's' : ''}...`);
       
-      // Retry logic for rate limits
-      let success = false;
-      let lastError = null;
-      
-      for (let attempt = 0; attempt < 3 && !success; attempt++) {
-        try {
-          // Add a small delay between retries
-          if (attempt > 0) {
-            await new Promise(r => setTimeout(r, 1000 * attempt));
-            toast.loading(`Retrying purchase (attempt ${attempt + 1}/3)...`, { id: pendingToast });
-          }
-          
-          // Prepare transaction with higher gas limit to account for network congestion
-          const gasEstimate = await contract.estimateGas.buyTickets(numTickets, { value });
-          const gasLimit = gasEstimate.mul(150).div(100); // Add 50% buffer
-          
-          const tx = await safeContractCall('buyTickets', numTickets, { 
-            value,
-            gasLimit
-          });
-          
-          // Wait for confirmation
-          toast.loading(`Transaction submitted. Waiting for confirmation...`, { id: pendingToast });
-          const receipt = await tx.wait();
-          
-          success = true;
-          
-          // Show success toast
-          toast.success(`Successfully purchased ${numTickets} ticket${numTickets > 1 ? 's' : ''}!`, { id: pendingToast });
-          
-          // Refresh data
-          setTimeout(() => {
-            fetchLotteryStatus().catch(console.error);
-            fetchUserTickets().catch(console.error);
-          }, 2000);
-          
-        } catch (err) {
-          lastError = err;
-          console.error(`Attempt ${attempt + 1} failed:`, err);
-          
-          // If not a rate limit error, don't retry
-          if (
-            !err.message.includes('rate limit') && 
-            !err.message.includes('request limit') &&
-            !err.message.includes('429') &&
-            !err.message.includes('too many requests')
-          ) {
-            break;
-          }
-        }
-      }
-      
-      if (!success) {
-        // Format a user-friendly error message
-        let errorMessage = 'Transaction failed';
-        
-        if (lastError) {
-          if (lastError.message.includes('insufficient funds')) {
-            errorMessage = 'Insufficient funds. Please make sure you have enough MON tokens.';
-          } else if (lastError.message.includes('user rejected')) {
-            errorMessage = 'Transaction rejected by user';
-          } else if (lastError.message.includes('rate limit') || lastError.message.includes('429')) {
-            errorMessage = 'Network is congested. Please try again in a moment.';
-          } else {
-            errorMessage = 'Transaction failed. Network may be congested.';
-          }
-        }
-        
-        toast.error(errorMessage, { id: pendingToast });
-        setError(errorMessage);
+      // Add significant gas buffer for network congestion
+      let gasEstimate;
+      try {
+        gasEstimate = await contract.estimateGas.buyTickets(numTickets, { value: totalCostWei });
+        gasEstimate = gasEstimate.mul(150).div(100); // 50% buffer
+      } catch (gasErr) {
+        console.error('Gas estimation error:', gasErr);
+        toast.error('Failed to estimate gas. Network may be congested.', { id: pendingToast });
+        setError('Failed to estimate gas. Please try again when network is less congested.');
         clearErrorAfterDelay(8000);
         return false;
       }
       
+      // Send transaction with the precise wei amount
+      const tx = await contract.buyTickets(numTickets, { 
+        value: totalCostWei,
+        gasLimit: gasEstimate
+      });
+      
+      toast.loading(`Transaction submitted. Waiting for confirmation...`, { id: pendingToast });
+      
+      // Wait for confirmation
+      const receipt = await tx.wait();
+      
+      // Success!
+      toast.success(`Successfully purchased ${numTickets} ticket${numTickets > 1 ? 's' : ''}!`, { id: pendingToast });
+      
+      // Refresh data with a delay to allow blockchain to update
+      setTimeout(() => {
+        fetchLotteryStatus().catch(console.error);
+        if (address) {
+          fetchUserTickets().catch(console.error);
+        }
+      }, 3000);
+      
       setError(null);
       return true;
-      
     } catch (err) {
       console.error('Error buying tickets:', err);
       
-      // Show user-friendly error
+      // Format a user-friendly error message
       let errorMessage = 'Transaction failed';
       
-      if (err.message.includes('insufficient funds')) {
-        errorMessage = 'Insufficient funds. Please make sure you have enough MON tokens.';
-      } else if (err.message.includes('user rejected')) {
-        errorMessage = 'Transaction rejected by user';
-      } else if (err.message.includes('rate limit') || err.message.includes('429')) {
-        errorMessage = 'Network is congested. Please try again in a moment.';
-      } else {
-        errorMessage = 'Transaction failed. Network may be congested.';
+      if (err.message) {
+        if (err.message.includes('insufficient funds')) {
+          errorMessage = 'Insufficient funds for purchase';
+        } else if (err.message.includes('user rejected')) {
+          errorMessage = 'Transaction was rejected';
+        } else if (err.message.includes('429') || err.message.includes('rate limit')) {
+          errorMessage = 'Network is busy. Please try again in a moment.';
+        } else if (err.message.includes('Incorrect payment amount')) {
+          errorMessage = 'Incorrect payment amount. This is a calculation error, please try again.';
+        } else {
+          errorMessage = 'Transaction failed. Network may be congested.';
+        }
       }
       
       toast.error(errorMessage);
@@ -431,19 +468,29 @@ export const useLottery = () => {
     isCorrectNetwork,
     ticketPrice,
     lotteryStatus,
+    address,
     fetchLotteryStatus,
     fetchUserTickets,
-    clearErrorAfterDelay
+    clearErrorAfterDelay,
+    safeContractCall
   ]);
   
   // Initial data fetch
   useEffect(() => {
     if (contract) {
+      // Stagger requests to avoid rate limiting
       fetchLotteryStatus().catch(console.error);
-      fetchTicketPrice().catch(console.error);
       
+      // Slight delay before fetching ticket price
+      setTimeout(() => {
+        fetchTicketPrice().catch(console.error);
+      }, 2000);
+      
+      // Further delay before fetching user tickets
       if (address) {
-        fetchUserTickets().catch(console.error);
+        setTimeout(() => {
+          fetchUserTickets().catch(console.error);
+        }, 4000);
       }
     }
   }, [contract, address, fetchLotteryStatus, fetchTicketPrice, fetchUserTickets]);
@@ -452,9 +499,10 @@ export const useLottery = () => {
   useEffect(() => {
     if (!contract) return;
     
+    // Refresh lottery status less frequently to avoid rate limiting
     const interval = setInterval(() => {
       fetchLotteryStatus().catch(console.error);
-    }, 30000);
+    }, 60000); // Once every minute instead of every 30 seconds
     
     return () => clearInterval(interval);
   }, [contract, fetchLotteryStatus]);

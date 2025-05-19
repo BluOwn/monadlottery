@@ -3,8 +3,14 @@ import { useLottery } from '../../hooks/useLottery';
 import Card from '../shared/Card';
 import LoadingSpinner from '../shared/LoadingSpinner';
 
+// Format address to shorter version
+const formatAddress = (addr) => {
+  if (!addr) return '';
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+};
+
 // Stat card component to reduce duplication
-const StatCard = ({ icon, name, value, description }) => (
+const StatCard = ({ icon, name, value, description, subValue }) => (
   <Card 
     className="border border-dark-200 dark:border-dark-700 hover:border-primary-300 dark:hover:border-primary-700 transition-all duration-300 hover:shadow-lg"
   >
@@ -20,6 +26,14 @@ const StatCard = ({ icon, name, value, description }) => (
       <div className="text-2xl font-bold text-dark-900 dark:text-white">
         {value}
       </div>
+      
+      {/* Show subValue if provided */}
+      {subValue && (
+        <div className="text-sm font-medium text-primary-600 dark:text-primary-400 mt-1 mb-2">
+          {subValue}
+        </div>
+      )}
+      
       <p className="text-sm text-dark-500 dark:text-dark-400">
         {description}
       </p>
@@ -55,8 +69,9 @@ const LotteryInfo = () => {
     {
       name: 'Top Buyer',
       value: topBuyer.address ? `${topBuyer.ticketCount} tickets` : 'No buyers yet',
+      subValue: topBuyer.address ? `Address: ${formatAddress(topBuyer.address)}` : null,
       icon: <FiAward className="h-5 w-5 text-primary-600" />,
-      description: 'Top buyer will receive a special reward',
+      description: 'Top buyer will receive a special reward of 10% of the prize pool',
     },
   ];
 
@@ -90,7 +105,8 @@ const LotteryInfo = () => {
               key={stat.name} 
               icon={stat.icon} 
               name={stat.name} 
-              value={stat.value} 
+              value={stat.value}
+              subValue={stat.subValue}
               description={stat.description} 
             />
           ))}

@@ -1,167 +1,252 @@
-import Head from 'next/head';
-import Layout from '../components/layout/Layout';
-import { FiExternalLink, FiCopy } from 'react-icons/fi';
-import { useState } from 'react';
-import toast, { Toaster } from 'react-hot-toast';
-import { MONAD_LOTTERY_CONTRACT_ADDRESS, SOCIAL_LINKS } from '../constants/contractAddresses';
+"use client"
 
-const ContractPage = () => {
-  const [copied, setCopied] = useState(false);
-  
-  const contractAddress = MONAD_LOTTERY_CONTRACT_ADDRESS;
-  const contractExplorerUrl = SOCIAL_LINKS.CONTRACT_EXPLORER;
-  
+import { useState } from "react"
+import { motion } from "framer-motion"
+import Layout from "../components/layout/Layout"
+import { Copy, ExternalLink, Check, Ticket, Gift, Shuffle, Code } from "lucide-react"
+import { toast, Toaster } from "react-hot-toast"
+
+// Assuming these constants are defined elsewhere in your project
+const MONAD_LOTTERY_CONTRACT_ADDRESS = "0xC9105a5DDDF4605C98712568cF2AA0367f6AaBA2"
+const SOCIAL_LINKS = {
+  CONTRACT_EXPLORER: "https://testnet.monadexplorer.com/address/0xC9105a5DDDF4605C98712568cF2AA0367f6AaBA2",
+  GITHUB: "https://github.com/BluOwn/monadlottery",
+}
+
+const ContractClientPage = () => {
+  const [copied, setCopied] = useState(false)
+
+  const contractAddress = MONAD_LOTTERY_CONTRACT_ADDRESS
+  const contractExplorerUrl = SOCIAL_LINKS.CONTRACT_EXPLORER
+
   const copyToClipboard = () => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(contractAddress);
-      setCopied(true);
-      toast.success('Contract address copied to clipboard!');
-      
-      setTimeout(() => {
-        setCopied(false);
-      }, 2000);
-    }
-  };
-  
-  return (
-    <>
-      <Head>
-        <title>Contract - Monad Lottery</title>
-        <meta name="description" content="View the Monad Lottery smart contract and its details." />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(contractAddress)
+      setCopied(true)
+      toast.success("Contract address copied to clipboard!")
 
-      <Layout>
-        <Toaster position="top-right" />
-        
-        <div className="py-20 bg-white dark:bg-dark-900">
-          <div className="container-custom">
-            <div className="max-w-4xl mx-auto">
-              <h1 className="text-4xl font-bold text-dark-900 dark:text-white mb-8">
+      setTimeout(() => {
+        setCopied(false)
+      }, 2000)
+    }
+  }
+
+  const copyCode = () => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText("// Full contract code available on GitHub")
+      toast.success("Contract code copied to clipboard!")
+    }
+  }
+
+  // Fade-in animation for sections
+  const fadeIn = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0 },
+  }
+
+  return (
+    <Layout>
+      <Toaster position="top-right" />
+
+      <div className="py-20 bg-gradient-to-b from-gray-950 to-black">
+        <div className="container-custom">
+          <div className="max-w-4xl mx-auto px-4">
+            <motion.div
+              initial="hidden"
+              animate="visible"
+              variants={fadeIn}
+              transition={{ duration: 0.5 }}
+              className="mb-12 text-center"
+            >
+              <h1 className="text-5xl font-bold text-white mb-4 bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600 inline-block">
                 Contract Information
               </h1>
-              
-              <div className="card mb-8">
-                <h2 className="text-xl font-semibold text-dark-900 dark:text-white mb-4">
-                  Smart Contract Address
-                </h2>
-                
-                <div className="flex items-center p-4 bg-dark-50 dark:bg-dark-800 rounded-lg mb-4">
-                  <code className="text-sm font-mono text-dark-800 dark:text-dark-200 break-all flex-grow">
-                    {contractAddress}
-                  </code>
+              <div className="w-20 h-1 bg-gradient-to-r from-purple-600 to-pink-600 mx-auto mt-2 rounded-full"></div>
+            </motion.div>
+
+            <motion.div
+              initial="hidden"
+              animate="visible"
+              variants={fadeIn}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="bg-gray-900 p-6 rounded-xl shadow-sm mb-8"
+            >
+              <h2 className="text-xl font-semibold text-white mb-4 flex items-center">
+                <div className="bg-purple-900/30 p-2 rounded-full mr-3">
+                  <Code className="w-5 h-5 text-purple-400" />
+                </div>
+                Smart Contract Address
+              </h2>
+
+              <div className="flex items-center p-4 bg-gray-800 rounded-lg mb-4">
+                <code className="text-sm font-mono text-gray-200 break-all flex-grow">{contractAddress}</code>
+                <button
+                  onClick={copyToClipboard}
+                  className="ml-3 p-2 text-gray-400 hover:text-purple-400 focus:outline-none transition-colors"
+                  aria-label="Copy contract address"
+                >
+                  {copied ? <Check className="h-5 w-5 text-green-500" /> : <Copy className="h-5 w-5" />}
+                </button>
+              </div>
+
+              <div className="flex justify-center">
+                <a
+                  href={contractExplorerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-transparent hover:bg-purple-900/30 text-purple-400 font-semibold py-2 px-4 border border-purple-500 rounded-lg flex items-center gap-2 transition-colors"
+                >
+                  <span>View on Monad Explorer</span>
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial="hidden"
+              animate="visible"
+              variants={fadeIn}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="bg-gray-900 p-6 rounded-xl shadow-sm mb-8"
+            >
+              <h2 className="text-xl font-semibold text-white mb-4 flex items-center">
+                <div className="bg-purple-900/30 p-2 rounded-full mr-3">
+                  <Ticket className="w-5 h-5 text-purple-400" />
+                </div>
+                Contract Details
+              </h2>
+
+              <div className="space-y-4">
+                <div className="border-b border-gray-700 pb-4">
+                  <h3 className="text-lg font-medium text-gray-200 mb-2">Ticket Price</h3>
+                  <p className="text-gray-400">0.01 MON per ticket</p>
+                </div>
+
+                <div className="border-b border-gray-700 pb-4">
+                  <h3 className="text-lg font-medium text-gray-200 mb-2 flex items-center">
+                    <div className="bg-purple-900/20 p-1 rounded-full mr-2">
+                      <Gift className="w-4 h-4 text-purple-400" />
+                    </div>
+                    Prize Distribution
+                  </h3>
+                  <ul className="space-y-2">
+                    <li className="flex items-start text-gray-400">
+                      <div className="bg-purple-900/10 p-1 rounded-full mr-2 mt-1">
+                        <span className="block w-2 h-2 bg-purple-400 rounded-full"></span>
+                      </div>
+                      <span>First Place: 40% of total pool</span>
+                    </li>
+                    <li className="flex items-start text-gray-400">
+                      <div className="bg-purple-900/10 p-1 rounded-full mr-2 mt-1">
+                        <span className="block w-2 h-2 bg-purple-400 rounded-full"></span>
+                      </div>
+                      <span>Second Place: 20% of total pool</span>
+                    </li>
+                    <li className="flex items-start text-gray-400">
+                      <div className="bg-purple-900/10 p-1 rounded-full mr-2 mt-1">
+                        <span className="block w-2 h-2 bg-purple-400 rounded-full"></span>
+                      </div>
+                      <span>Third Place: 10% of total pool</span>
+                    </li>
+                    <li className="flex items-start text-gray-400">
+                      <div className="bg-purple-900/10 p-1 rounded-full mr-2 mt-1">
+                        <span className="block w-2 h-2 bg-pink-400 rounded-full"></span>
+                      </div>
+                      <span>Top Buyer: 10% of total pool</span>
+                    </li>
+                    <li className="flex items-start text-gray-400">
+                      <div className="bg-purple-900/10 p-1 rounded-full mr-2 mt-1">
+                        <span className="block w-2 h-2 bg-gray-400 rounded-full"></span>
+                      </div>
+                      <span>Administration: 20% of total pool</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="border-b border-gray-700 pb-4">
+                  <h3 className="text-lg font-medium text-gray-200 mb-2 flex items-center">
+                    <div className="bg-purple-900/20 p-1 rounded-full mr-2">
+                      <Shuffle className="w-4 h-4 text-purple-400" />
+                    </div>
+                    Winner Selection
+                  </h3>
+                  <p className="text-gray-400">
+                    Winners are selected using Google's random number generator. The contract owner inputs the three
+                    winning ticket numbers, and prizes are automatically distributed to the winners.
+                  </p>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-medium text-gray-200 mb-2">Contract Features</h3>
+                  <ul className="space-y-2">
+                    <li className="flex items-start text-gray-400">
+                      <div className="bg-purple-900/10 p-1 rounded-full mr-2 mt-1">
+                        <span className="block w-2 h-2 bg-purple-400 rounded-full"></span>
+                      </div>
+                      <span>Buy multiple tickets at once</span>
+                    </li>
+                    <li className="flex items-start text-gray-400">
+                      <div className="bg-purple-900/10 p-1 rounded-full mr-2 mt-1">
+                        <span className="block w-2 h-2 bg-purple-400 rounded-full"></span>
+                      </div>
+                      <span>Automatic prize distribution</span>
+                    </li>
+                    <li className="flex items-start text-gray-400">
+                      <div className="bg-purple-900/10 p-1 rounded-full mr-2 mt-1">
+                        <span className="block w-2 h-2 bg-purple-400 rounded-full"></span>
+                      </div>
+                      <span>Special reward for top buyer</span>
+                    </li>
+                    <li className="flex items-start text-gray-400">
+                      <div className="bg-purple-900/10 p-1 rounded-full mr-2 mt-1">
+                        <span className="block w-2 h-2 bg-purple-400 rounded-full"></span>
+                      </div>
+                      <span>View your purchased tickets</span>
+                    </li>
+                    <li className="flex items-start text-gray-400">
+                      <div className="bg-purple-900/10 p-1 rounded-full mr-2 mt-1">
+                        <span className="block w-2 h-2 bg-purple-400 rounded-full"></span>
+                      </div>
+                      <span>Check lottery status</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial="hidden"
+              animate="visible"
+              variants={fadeIn}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="bg-gray-900 p-6 rounded-xl shadow-sm"
+            >
+              <h2 className="text-xl font-semibold text-white mb-4 flex items-center">
+                <div className="bg-purple-900/30 p-2 rounded-full mr-3">
+                  <Code className="w-5 h-5 text-purple-400" />
+                </div>
+                Contract Code
+              </h2>
+
+              <p className="text-gray-400 mb-4">
+                The Monad Lottery smart contract is open source. You can view the source code below or on our GitHub
+                repository.
+              </p>
+
+              <div className="relative">
+                <div className="absolute top-0 right-0 p-2">
                   <button
-                    onClick={copyToClipboard}
-                    className="ml-3 p-2 text-dark-600 dark:text-dark-400 hover:text-primary-600 dark:hover:text-primary-500 focus:outline-none transition-colors"
-                    aria-label="Copy contract address"
+                    onClick={copyCode}
+                    className="p-2 text-gray-400 hover:text-purple-400 focus:outline-none transition-colors"
+                    aria-label="Copy contract code"
                   >
-                    {copied ? (
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    ) : (
-                      <FiCopy className="h-5 w-5" />
-                    )}
+                    <Copy className="h-5 w-5" />
                   </button>
                 </div>
-                
-                <div className="flex justify-center">
-                  <a
-                    href={contractExplorerUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn-outline flex items-center gap-2"
-                  >
-                    <span>View on Monad Explorer</span>
-                    <FiExternalLink />
-                  </a>
-                </div>
-              </div>
-              
-              <div className="card mb-8">
-                <h2 className="text-xl font-semibold text-dark-900 dark:text-white mb-4">
-                  Contract Details
-                </h2>
-                
-                <div className="space-y-4">
-                  <div className="border-b border-dark-200 dark:border-dark-700 pb-4">
-                    <h3 className="text-lg font-medium text-dark-800 dark:text-dark-200 mb-2">
-                      Ticket Price
-                    </h3>
-                    <p className="text-dark-600 dark:text-dark-400">
-                      0.01 MON per ticket
-                    </p>
-                  </div>
-                  
-                  <div className="border-b border-dark-200 dark:border-dark-700 pb-4">
-                    <h3 className="text-lg font-medium text-dark-800 dark:text-dark-200 mb-2">
-                      Prize Distribution
-                    </h3>
-                    <ul className="list-disc list-inside text-dark-600 dark:text-dark-400 space-y-1">
-                      <li>First Place: 40% of total pool</li>
-                      <li>Second Place: 20% of total pool</li>
-                      <li>Third Place: 10% of total pool</li>
-                      <li>Top Buyer: 10% of total pool</li>
-                      <li>Administration: 20% of total pool</li>
-                    </ul>
-                  </div>
-                  
-                  <div className="border-b border-dark-200 dark:border-dark-700 pb-4">
-                    <h3 className="text-lg font-medium text-dark-800 dark:text-dark-200 mb-2">
-                      Winner Selection
-                    </h3>
-                    <p className="text-dark-600 dark:text-dark-400">
-                      Winners are selected using Google's random number generator. 
-                      The contract owner inputs the three winning ticket numbers, and 
-                      prizes are automatically distributed to the winners.
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <h3 className="text-lg font-medium text-dark-800 dark:text-dark-200 mb-2">
-                      Contract Features
-                    </h3>
-                    <ul className="list-disc list-inside text-dark-600 dark:text-dark-400 space-y-1">
-                      <li>Buy multiple tickets at once</li>
-                      <li>Automatic prize distribution</li>
-                      <li>Special reward for top buyer</li>
-                      <li>View your purchased tickets</li>
-                      <li>Check lottery status</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="card">
-                <h2 className="text-xl font-semibold text-dark-900 dark:text-white mb-4">
-                  Contract Code
-                </h2>
-                
-                <p className="text-dark-600 dark:text-dark-400 mb-4">
-                  The Monad Lottery smart contract is open source. You can view the 
-                  source code below or on our GitHub repository.
-                </p>
-                
-                <div className="relative">
-                  <div className="absolute top-0 right-0 p-2">
-                    <button
-                      onClick={() => {
-                        if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                          navigator.clipboard.writeText("// Full contract code available on GitHub");
-                          toast.success('Contract code copied to clipboard!');
-                        }
-                      }}
-                      className="p-2 text-dark-600 dark:text-dark-400 hover:text-primary-600 dark:hover:text-primary-500 focus:outline-none transition-colors"
-                      aria-label="Copy contract code"
-                    >
-                      <FiCopy className="h-5 w-5" />
-                    </button>
-                  </div>
-                  
-                  <div className="overflow-x-auto bg-dark-50 dark:bg-dark-800 rounded-lg p-4">
-                    <pre className="text-sm font-mono text-dark-800 dark:text-dark-200 whitespace-pre-wrap">
-                      {`// SPDX-License-Identifier: MIT
+
+                <div className="overflow-x-auto bg-gray-800 rounded-lg p-4">
+                  <pre className="text-sm font-mono text-gray-200 whitespace-pre-wrap">
+                    {`// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -189,30 +274,28 @@ contract MonadLottery is Ownable, ReentrancyGuard {
     
     // More code... (truncated for space)
     
-    // See full code on GitHub or Monad Explorer
-}`}
-                    </pre>
-                  </div>
-                </div>
-                
-                <div className="mt-4 flex justify-center">
-                  <a
-                    href={SOCIAL_LINKS.GITHUB}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn-outline flex items-center gap-2"
-                  >
-                    <span>View Full Code on GitHub</span>
-                    <FiExternalLink />
-                  </a>
+    // See full code on GitHub or Monad Explorer`}
+                  </pre>
                 </div>
               </div>
-            </div>
+
+              <div className="mt-6 flex justify-center">
+                <a
+                  href={SOCIAL_LINKS.GITHUB}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-transparent hover:bg-purple-900/30 text-purple-400 font-semibold py-2 px-4 border border-purple-500 rounded-lg flex items-center gap-2 transition-colors"
+                >
+                  <span>View Full Code on GitHub</span>
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </div>
+            </motion.div>
           </div>
         </div>
-      </Layout>
-    </>
-  );
-};
+      </div>
+    </Layout>
+  )
+}
 
-export default ContractPage;
+export default ContractClientPage

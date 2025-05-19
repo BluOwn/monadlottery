@@ -1,122 +1,113 @@
-import Link from 'next/link';
-import { FiGithub, FiTwitter, FiFileText } from 'react-icons/fi';
-import { SOCIAL_LINKS } from '../../constants/contractAddresses';
+"use client"
+
+import Link from "next/link"
+import { Github, FileText, Twitter } from "lucide-react"
+import { motion } from "framer-motion"
+
+// Assuming these constants are defined elsewhere in your project
+const SOCIAL_LINKS = {
+  GITHUB: "https://github.com/BluOwn/monadlottery",
+  CONTRACT_EXPLORER: "https://testnet.monadexplorer.com/address/0xC9105a5DDDF4605C98712568cF2AA0367f6AaBA2",
+  TWITTER: "https://twitter.com/Oprimedev",
+}
 
 const Footer = () => {
-  const currentYear = new Date().getFullYear();
-  
+  const currentYear = new Date().getFullYear()
+
   const socialLinks = [
     {
-      name: 'Github',
+      name: "Github",
       href: SOCIAL_LINKS.GITHUB,
-      icon: <FiGithub className="h-5 w-5" />,
+      icon: <Github className="h-4 w-4" />,
     },
     {
-      name: 'Contract',
+      name: "Contract",
       href: SOCIAL_LINKS.CONTRACT_EXPLORER,
-      icon: <FiFileText className="h-5 w-5" />,
+      icon: <FileText className="h-4 w-4" />,
     },
     {
-      name: 'Twitter',
+      name: "Twitter",
       href: SOCIAL_LINKS.TWITTER,
-      icon: <FiTwitter className="h-5 w-5" />,
+      icon: <Twitter className="h-4 w-4" />,
     },
-  ];
+  ]
+
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+      },
+    },
+  }
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 10 },
+    visible: { opacity: 1, y: 0 },
+  }
 
   return (
-    <footer className="bg-white dark:bg-dark-900 py-8 border-t border-dark-200 dark:border-dark-700">
+    <footer className="bg-gray-950 py-4 border-t border-gray-800">
       <div className="container-custom">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* Branding */}
-          <div className="flex flex-col">
-            <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-primary-500 to-secondary-500 bg-clip-text text-transparent mb-2">
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+          variants={containerVariants}
+          className="flex flex-col md:flex-row md:items-center md:justify-between"
+        >
+          {/* Branding and Social Links */}
+          <motion.div variants={itemVariants} className="flex items-center space-x-4">
+            <Link
+              href="/"
+              className="text-lg font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent"
+            >
               Monad Lottery
             </Link>
-            <p className="text-sm text-dark-500 dark:text-dark-400 mb-4">
-              Unofficial lottery giveaway on Monad testnet
-            </p>
-            <div className="flex gap-4 mt-auto">
+            <div className="h-4 w-px bg-gray-800 hidden md:block"></div>
+            <div className="flex items-center space-x-3">
               {socialLinks.map((link) => (
-                <a
+                <motion.a
                   key={link.name}
                   href={link.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-dark-500 hover:text-primary-600 dark:text-dark-400 dark:hover:text-primary-500 transition-colors"
+                  className="text-gray-400 hover:text-purple-400 transition-colors p-1"
                   aria-label={link.name}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.95 }}
                 >
                   {link.icon}
-                </a>
+                </motion.a>
               ))}
             </div>
-          </div>
+          </motion.div>
 
           {/* Quick Links */}
-          <div>
-            <h3 className="text-lg font-semibold mb-4 text-dark-800 dark:text-dark-200">
-              Quick Links
-            </h3>
-            <ul className="space-y-2">
-              <li>
-                <Link href="/" className="text-dark-600 dark:text-dark-300 hover:text-primary-600 dark:hover:text-primary-500 transition-colors">
-                  Home
-                </Link>
-              </li>
-              <li>
-                <Link href="/about" className="text-dark-600 dark:text-dark-300 hover:text-primary-600 dark:hover:text-primary-500 transition-colors">
-                  About
-                </Link>
-              </li>
-              <li>
-                <Link href="/contact" className="text-dark-600 dark:text-dark-300 hover:text-primary-600 dark:hover:text-primary-500 transition-colors">
-                  Contact
-                </Link>
-              </li>
-              <li>
-                <Link href="/contract" className="text-dark-600 dark:text-dark-300 hover:text-primary-600 dark:hover:text-primary-500 transition-colors">
-                  Contract
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          {/* Newsletter/Contact */}
-          <div>
-            <h3 className="text-lg font-semibold mb-4 text-dark-800 dark:text-dark-200">
-              Stay Updated
-            </h3>
-            <p className="text-sm text-dark-500 dark:text-dark-400 mb-4">
-              Join our community to stay updated with the latest lottery news.
-            </p>
-            <div className="flex">
-              <input
-                type="email"
-                placeholder="Your email"
-                className="px-3 py-2 bg-white dark:bg-dark-800 border border-dark-300 dark:border-dark-600 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
-              <button className="px-4 py-2 bg-primary-600 text-white rounded-r-lg hover:bg-primary-700 transition-colors">
-                Join
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-8 pt-6 border-t border-dark-200 dark:border-dark-700 text-center text-sm text-dark-500 dark:text-dark-400">
-          <p>
-            © {currentYear} Monad Lottery. All rights reserved. Website:{' '}
-            <a 
-              href="https://lottery.monadescrow.xyz" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-primary-600 hover:underline"
-            >
-              lottery.monadescrow.xyz
-            </a>
-          </p>
-        </div>
+          <motion.div variants={itemVariants} className="flex items-center mt-3 md:mt-0">
+            <nav className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+              <Link href="/" className="text-gray-400 hover:text-purple-400 transition-colors">
+                Home
+              </Link>
+              <Link href="/about" className="text-gray-400 hover:text-purple-400 transition-colors">
+                About
+              </Link>
+              <Link href="/contact" className="text-gray-400 hover:text-purple-400 transition-colors">
+                Contact
+              </Link>
+              <Link href="/contract" className="text-gray-400 hover:text-purple-400 transition-colors">
+                Contract
+              </Link>
+              <span className="text-gray-600">•</span>
+              <span className="text-gray-500 text-xs">© {currentYear} Monad Lottery</span>
+            </nav>
+          </motion.div>
+        </motion.div>
       </div>
     </footer>
-  );
-};
+  )
+}
 
-export default Footer;
+export default Footer
