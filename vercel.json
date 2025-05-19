@@ -1,0 +1,19 @@
+{
+  "name": "monad-lottery",
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
+  ],
+  "env": {
+    "NEXT_PUBLIC_CONTRACT_ADDRESS": "0xC9105a5DDDF4605C98712568cF2AA0367f6AaBA2"
+  }
+}
