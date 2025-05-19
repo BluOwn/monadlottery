@@ -5,7 +5,7 @@ import { useWallet } from '../../hooks/useWallet';
 
 const PrizeInfo = () => {
   const { isConnected } = useWallet();
-  const { lotteryStatus, loading, error } = useLottery();
+  const { lotteryStatus = {}, loading, error } = useLottery();
 
   // Ensure lotteryStatus and totalPoolAmount exist and fallback to 0 if not
   const totalPoolAmount = parseFloat(lotteryStatus?.totalPoolAmount || '0');
@@ -46,6 +46,7 @@ const PrizeInfo = () => {
     },
   ];
 
+  // Handle loading state
   if (loading) {
     return (
       <div className="py-16 bg-white dark:bg-dark-900">
@@ -56,6 +57,7 @@ const PrizeInfo = () => {
     );
   }
 
+  // Handle error state
   if (error) {
     return (
       <div className="py-16 bg-white dark:bg-dark-900">
@@ -80,7 +82,7 @@ const PrizeInfo = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {prizes.map((prize) => (
+          {prizes && prizes.map((prize) => (
             <div
               key={prize.place}
               className="card text-center border border-dark-200 dark:border-dark-700 hover:border-primary-300 dark:hover:border-primary-700 transition-all duration-300 hover:shadow-lg"
