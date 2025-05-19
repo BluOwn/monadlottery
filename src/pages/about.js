@@ -20,7 +20,6 @@ const AboutPage = () => {
               </h1>
 
               <div className="prose dark:prose-invert prose-lg max-w-none">
-                {/* This section can be edited manually */}
                 <p>
                   The Monad Lottery is an unofficial lottery giveaway running on the Monad testnet. 
                   It provides a fun way to engage with the Monad blockchain while having a chance to win prizes.

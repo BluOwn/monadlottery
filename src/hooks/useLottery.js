@@ -2,9 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { useWallet } from './useWallet';
 import MonadLotteryABI from '../abis/MonadLottery.json';
-
-// Contract address - replace with your deployed contract address
-const LOTTERY_CONTRACT_ADDRESS = '0xC9105a5DDDF4605C98712568cF2AA0367f6AaBA2';
+import { MONAD_LOTTERY_CONTRACT_ADDRESS } from '../constants/contractAddresses';
 
 export const useLottery = () => {
   const { signer, provider, address, isConnected } = useWallet();
@@ -18,7 +16,7 @@ export const useLottery = () => {
   const [ticketPrice, setTicketPrice] = useState('0');
   const [userTickets, setUserTickets] = useState([]);
   const [userTicketCount, setUserTicketCount] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [topBuyer, setTopBuyer] = useState({
     address: null,
@@ -29,19 +27,20 @@ export const useLottery = () => {
   useEffect(() => {
     if (provider) {
       try {
-        // Fix: Remove ".abi" as MonadLotteryABI is already the ABI array
         const contractRead = new ethers.Contract(
-          LOTTERY_CONTRACT_ADDRESS,
+          MONAD_LOTTERY_CONTRACT_ADDRESS,
           MonadLotteryABI,
           provider
         );
         setContract(contractRead);
-        
-        fetchTicketPrice();
+        setLoading(false);
       } catch (err) {
         console.error('Error setting up contract:', err);
         setError('Failed to setup contract instance');
+        setLoading(false);
       }
+    } else {
+      setLoading(false);
     }
   }, [provider]);
   
@@ -50,7 +49,7 @@ export const useLottery = () => {
     if (signer && contract) {
       try {
         const contractWrite = new ethers.Contract(
-          LOTTERY_CONTRACT_ADDRESS,
+          MONAD_LOTTERY_CONTRACT_ADDRESS,
           MonadLotteryABI,
           signer
         );

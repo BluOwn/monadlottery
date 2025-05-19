@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import Link from 'next/link'; // Fix: Import Next.js Link component
 import { FiWifi, FiUser } from 'react-icons/fi';
 import { useWallet } from '../../hooks/useWallet';
-import { MONAD_TESTNET_CHAIN_ID } from '../../constants/contractAddresses'; // Fix: Import chain ID from constants
+import { MONAD_TESTNET_CHAIN_ID } from '../../constants/contractAddresses';
 
 const ConnectWallet = ({ compact = false }) => {
   const { connect, disconnect, address, isConnected, chainId } = useWallet();
@@ -14,7 +13,7 @@ const ConnectWallet = ({ compact = false }) => {
       return;
     }
     
-    // Fix: Normalize chain IDs before comparison to handle different formats
+    // Normalize chain IDs before comparison to handle different formats
     const normalizeChainId = (id) => {
       if (typeof id === 'string') {
         // Remove '0x' prefix if present and convert to number

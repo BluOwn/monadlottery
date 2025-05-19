@@ -1,5 +1,6 @@
-import Link from 'next/link'; // Fix: Import Next.js Link component
+import Link from 'next/link';
 import { FiGithub, FiTwitter, FiFileText } from 'react-icons/fi';
+import { SOCIAL_LINKS } from '../../constants/contractAddresses';
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
@@ -7,17 +8,17 @@ const Footer = () => {
   const socialLinks = [
     {
       name: 'Github',
-      href: 'https://github.com/BluOwn/monadlottery',
+      href: SOCIAL_LINKS.GITHUB,
       icon: <FiGithub className="h-5 w-5" />,
     },
     {
       name: 'Contract',
-      href: 'https://testnet.monadexplorer.com/0xC9105a5DDDF4605C98712568cF2AA0367f6AaBA2',
+      href: SOCIAL_LINKS.CONTRACT_EXPLORER,
       icon: <FiFileText className="h-5 w-5" />,
     },
     {
       name: 'Twitter',
-      href: 'https://twitter.com/Oprimedev',
+      href: SOCIAL_LINKS.TWITTER,
       icon: <FiTwitter className="h-5 w-5" />,
     },
   ];
@@ -56,7 +57,6 @@ const Footer = () => {
               Quick Links
             </h3>
             <ul className="space-y-2">
-              {/* Fix: Use Next.js Link component for internal navigation */}
               <li>
                 <Link href="/" className="text-dark-600 dark:text-dark-300 hover:text-primary-600 dark:hover:text-primary-500 transition-colors">
                   Home

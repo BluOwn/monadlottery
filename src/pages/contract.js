@@ -3,24 +3,24 @@ import Layout from '../components/layout/Layout';
 import { FiExternalLink, FiCopy } from 'react-icons/fi';
 import { useState } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
+import { MONAD_LOTTERY_CONTRACT_ADDRESS, SOCIAL_LINKS } from '../constants/contractAddresses';
 
 const ContractPage = () => {
   const [copied, setCopied] = useState(false);
   
-  // Replace with your contract address
-  const contractAddress = '0xC9105a5DDDF4605C98712568cF2AA0367f6AaBA2';
-  
-  // Replace with your contract explorer URL
-  const contractExplorerUrl = `https://testnet.monadexplorer.com/address/${contractAddress}`;
+  const contractAddress = MONAD_LOTTERY_CONTRACT_ADDRESS;
+  const contractExplorerUrl = SOCIAL_LINKS.CONTRACT_EXPLORER;
   
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(contractAddress);
-    setCopied(true);
-    toast.success('Contract address copied to clipboard!');
-    
-    setTimeout(() => {
-      setCopied(false);
-    }, 2000);
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(contractAddress);
+      setCopied(true);
+      toast.success('Contract address copied to clipboard!');
+      
+      setTimeout(() => {
+        setCopied(false);
+      }, 2000);
+    }
   };
   
   return (
@@ -147,10 +147,10 @@ const ContractPage = () => {
                   <div className="absolute top-0 right-0 p-2">
                     <button
                       onClick={() => {
-                        // In a real app, you would get the contract code from somewhere
-                        // For now, we'll just show a success message
-                        navigator.clipboard.writeText("// Code copied");
-                        toast.success('Contract code copied to clipboard!');
+                        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                          navigator.clipboard.writeText("// Full contract code available on GitHub");
+                          toast.success('Contract code copied to clipboard!');
+                        }
                       }}
                       className="p-2 text-dark-600 dark:text-dark-400 hover:text-primary-600 dark:hover:text-primary-500 focus:outline-none transition-colors"
                       aria-label="Copy contract code"
@@ -197,7 +197,7 @@ contract MonadLottery is Ownable, ReentrancyGuard {
                 
                 <div className="mt-4 flex justify-center">
                   <a
-                    href="https://github.com/BluOwn/monadlottery"
+                    href={SOCIAL_LINKS.GITHUB}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn-outline flex items-center gap-2"

@@ -1,6 +1,3 @@
-// Fix: This constant file should contain links and addresses, not wallet context code
-// Move wallet context to src/contexts/WalletContext.jsx
-
 // Define correct chain ID for Monad testnet
 export const MONAD_TESTNET_CHAIN_ID = '10143'; // Example chain ID for Monad testnet
 

@@ -57,6 +57,12 @@ const MyAccountPage = () => {
     );
   };
   
+  const scrollToTicketSection = (e) => {
+    e.preventDefault();
+    // Redirect to home page with ticket section hash
+    window.location.href = '/#ticket-purchase';
+  };
+  
   return (
     <>
       <Head>
@@ -184,13 +190,13 @@ const MyAccountPage = () => {
                     </h2>
                     
                     {lotteryStatus.isActive && (
-                      <a
-                        href="/#ticket-purchase"
+                      <button
+                        onClick={scrollToTicketSection}
                         className="btn-primary"
                       >
                         <FiTicket className="h-4 w-4" />
                         <span>Buy More Tickets</span>
-                      </a>
+                      </button>
                     )}
                   </div>
                   
@@ -211,12 +217,12 @@ const MyAccountPage = () => {
                         You haven&apos;t purchased any tickets yet.
                       </p>
                       {lotteryStatus.isActive && (
-                        <a
-                          href="/#ticket-purchase"
+                        <button
+                          onClick={scrollToTicketSection}
                           className="btn-primary inline-flex"
                         >
                           <span>Buy Tickets</span>
-                        </a>
+                        </button>
                       )}
                     </div>
                   ) : (

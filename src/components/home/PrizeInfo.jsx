@@ -1,8 +1,11 @@
+import React from 'react';
 import { FiAward, FiTrophy, FiGift } from 'react-icons/fi';
 import { useLottery } from '../../hooks/useLottery';
+import { useWallet } from '../../hooks/useWallet';
 
 const PrizeInfo = () => {
-  const { lotteryStatus } = useLottery();
+  const { isConnected } = useWallet();
+  const { lotteryStatus, loading, error } = useLottery();
 
   // Ensure lotteryStatus and totalPoolAmount exist and fallback to 0 if not
   const totalPoolAmount = parseFloat(lotteryStatus?.totalPoolAmount || '0');
@@ -42,6 +45,26 @@ const PrizeInfo = () => {
       description: 'The person who buys the most tickets gets 10% of the prize pool',
     },
   ];
+
+  if (loading) {
+    return (
+      <div className="py-16 bg-white dark:bg-dark-900">
+        <div className="container-custom text-center">
+          <p className="text-dark-600 dark:text-dark-400">Loading prize information...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="py-16 bg-white dark:bg-dark-900">
+        <div className="container-custom text-center">
+          <p className="text-red-500">Error loading prize information. Please try again later.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="py-16 bg-white dark:bg-dark-900">

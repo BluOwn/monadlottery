@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useCallback, useContext } from 'react';
+import React, { createContext, useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 
 export const WalletContext = createContext({
@@ -125,5 +125,3 @@ export const WalletProvider = ({ children }) => {
     </WalletContext.Provider>
   );
 };
-
-export const useWallet = () => useContext(WalletContext);
