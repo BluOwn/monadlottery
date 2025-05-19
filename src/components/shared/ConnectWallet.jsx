@@ -1,16 +1,30 @@
 import { useState, useEffect } from 'react';
+import Link from 'next/link'; // Fix: Import Next.js Link component
 import { FiWifi, FiUser } from 'react-icons/fi';
 import { useWallet } from '../../hooks/useWallet';
+import { MONAD_TESTNET_CHAIN_ID } from '../../constants/contractAddresses'; // Fix: Import chain ID from constants
 
 const ConnectWallet = ({ compact = false }) => {
   const { connect, disconnect, address, isConnected, chainId } = useWallet();
   const [isCorrectChain, setIsCorrectChain] = useState(false);
 
   useEffect(() => {
-    // Check if connected to the Monad testnet
-    // Replace MONAD_TESTNET_CHAIN_ID with the actual chain ID for Monad testnet
-    const MONAD_TESTNET_CHAIN_ID = '0x27af'; // This is a example value, use actual chain ID
-    setIsCorrectChain(chainId === MONAD_TESTNET_CHAIN_ID);
+    if (!chainId) {
+      setIsCorrectChain(false);
+      return;
+    }
+    
+    // Fix: Normalize chain IDs before comparison to handle different formats
+    const normalizeChainId = (id) => {
+      if (typeof id === 'string') {
+        // Remove '0x' prefix if present and convert to number
+        return id.startsWith('0x') ? parseInt(id, 16).toString() : id;
+      }
+      return id.toString();
+    };
+    
+    // Compare the normalized chain IDs
+    setIsCorrectChain(normalizeChainId(chainId) === normalizeChainId(MONAD_TESTNET_CHAIN_ID));
   }, [chainId]);
 
   const formatAddress = (addr) => {

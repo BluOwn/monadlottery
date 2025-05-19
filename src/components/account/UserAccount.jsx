@@ -1,3 +1,4 @@
+import Link from 'next/link'; // Fix: Import Next.js Link component
 import React from 'react';
 import { useWallet } from '../../hooks/useWallet';
 import { useLottery } from '../../hooks/useLottery';
@@ -38,6 +39,15 @@ const UserAccount = () => {
   const handleRefresh = () => {
     if (!isConnected) return;
     refreshUserTickets();
+  };
+  
+  // Fix: Function to handle smooth scrolling to ticket section
+  const scrollToTicketSection = (e) => {
+    e.preventDefault();
+    const ticketSection = document.getElementById('ticket-purchase');
+    if (ticketSection) {
+      ticketSection.scrollIntoView({ behavior: 'smooth' });
+    }
   };
   
   if (!isConnected) {
@@ -157,13 +167,14 @@ const UserAccount = () => {
           </h2>
           
           {lotteryStatus.isActive && (
-            
-              href="/#ticket-purchase"
+            // Fix: Replace anchor tag with onClick handler for smooth scrolling
+            <button
+              onClick={scrollToTicketSection}
               className="btn-primary"
             >
               <FiTicket className="h-4 w-4" />
               <span>Buy More Tickets</span>
-            </a>
+            </button>
           )}
         </div>
         
@@ -184,12 +195,13 @@ const UserAccount = () => {
               You haven&apos;t purchased any tickets yet.
             </p>
             {lotteryStatus.isActive && (
-              
-                href="/#ticket-purchase"
+              // Fix: Replace anchor tag with onClick handler for smooth scrolling
+              <button
+                onClick={scrollToTicketSection}
                 className="btn-primary inline-flex"
               >
                 <span>Buy Tickets</span>
-              </a>
+              </button>
             )}
           </div>
         ) : (

@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from 'next/link'; // Fix: Import Next.js Link component
 import { FiGithub, FiTwitter, FiFileText } from 'react-icons/fi';
 
 const Footer = () => {
@@ -56,6 +56,7 @@ const Footer = () => {
               Quick Links
             </h3>
             <ul className="space-y-2">
+              {/* Fix: Use Next.js Link component for internal navigation */}
               <li>
                 <Link href="/" className="text-dark-600 dark:text-dark-300 hover:text-primary-600 dark:hover:text-primary-500 transition-colors">
                   Home

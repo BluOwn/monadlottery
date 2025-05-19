@@ -28,28 +28,39 @@ export const useLottery = () => {
   // Setup contract instance
   useEffect(() => {
     if (provider) {
-      const contractRead = new ethers.Contract(
-        LOTTERY_CONTRACT_ADDRESS,
-        MonadLotteryABI.abi,
-        provider
-      );
-      setContract(contractRead);
-      
-      fetchTicketPrice();
+      try {
+        // Fix: Remove ".abi" as MonadLotteryABI is already the ABI array
+        const contractRead = new ethers.Contract(
+          LOTTERY_CONTRACT_ADDRESS,
+          MonadLotteryABI,
+          provider
+        );
+        setContract(contractRead);
+        
+        fetchTicketPrice();
+      } catch (err) {
+        console.error('Error setting up contract:', err);
+        setError('Failed to setup contract instance');
+      }
     }
   }, [provider]);
   
   // Setup contract instance with signer when connected
   useEffect(() => {
     if (signer && contract) {
-      const contractWrite = new ethers.Contract(
-        LOTTERY_CONTRACT_ADDRESS,
-        MonadLotteryABI.abi,
-        signer
-      );
-      setContract(contractWrite);
+      try {
+        const contractWrite = new ethers.Contract(
+          LOTTERY_CONTRACT_ADDRESS,
+          MonadLotteryABI,
+          signer
+        );
+        setContract(contractWrite);
+      } catch (err) {
+        console.error('Error setting up contract with signer:', err);
+        setError('Failed to setup contract with signer');
+      }
     }
-  }, [signer]);
+  }, [signer, contract]);
   
   // Fetch lottery status
   const fetchLotteryStatus = useCallback(async () => {

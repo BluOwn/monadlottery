@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Link from 'next/link'; // Fix: Import Next.js Link component
 import { FiExternalLink, FiCopy } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import { MONAD_LOTTERY_CONTRACT_ADDRESS, SOCIAL_LINKS } from '../../constants/contractAddresses';
@@ -10,13 +11,16 @@ const ContractInfo = () => {
   const contractExplorerUrl = SOCIAL_LINKS.CONTRACT_EXPLORER;
   
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(contractAddress);
-    setCopied(true);
-    toast.success('Contract address copied to clipboard!');
-    
-    setTimeout(() => {
-      setCopied(false);
-    }, 2000);
+    // Fix: Add browser environment check before using clipboard API
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(contractAddress);
+      setCopied(true);
+      toast.success('Contract address copied to clipboard!');
+      
+      setTimeout(() => {
+        setCopied(false);
+      }, 2000);
+    }
   };
   
   return (
@@ -48,7 +52,8 @@ const ContractInfo = () => {
             </div>
             
             <div className="flex justify-center">
-              
+              {/* Fix: Keep as anchor tag since it's an external link */}
+              <a
                 href={contractExplorerUrl}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -128,8 +133,11 @@ const ContractInfo = () => {
               <div className="absolute top-0 right-0 p-2">
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText("// Full contract code available on GitHub");
-                    toast.success('Contract code copied to clipboard!');
+                    // Fix: Add browser environment check before using clipboard API
+                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                      navigator.clipboard.writeText("// Full contract code available on GitHub");
+                      toast.success('Contract code copied to clipboard!');
+                    }
                   }}
                   className="p-2 text-dark-600 dark:text-dark-400 hover:text-primary-600 dark:hover:text-primary-500 focus:outline-none transition-colors"
                   aria-label="Copy contract code"
@@ -175,7 +183,8 @@ contract MonadLottery is Ownable, ReentrancyGuard {
             </div>
             
             <div className="mt-4 flex justify-center">
-              
+              {/* Fix: Keep as anchor tag since it's an external link */}
+              <a
                 href={SOCIAL_LINKS.GITHUB}
                 target="_blank"
                 rel="noopener noreferrer"
