@@ -4,8 +4,16 @@ import { useLottery } from '../../hooks/useLottery';
 import { useWallet } from '../../hooks/useWallet';
 
 const PrizeInfo = () => {
-  const { isConnected } = useWallet();
-  const { lotteryStatus = {}, loading, error } = useLottery();
+  const { isConnected } = useWallet() || { isConnected: false };
+  const { 
+    lotteryStatus, 
+    loading, 
+    error 
+  } = useLottery() || { 
+    lotteryStatus: { totalPoolAmount: '0' }, 
+    loading: false, 
+    error: null 
+  };
 
   // Ensure lotteryStatus and totalPoolAmount exist and fallback to 0 if not
   const totalPoolAmount = parseFloat(lotteryStatus?.totalPoolAmount || '0');
@@ -15,6 +23,7 @@ const PrizeInfo = () => {
   const thirdPlacePrize = totalPoolAmount * 0.1;
   const topBuyerPrize = totalPoolAmount * 0.1;
 
+  // Define prizes array with proper checks
   const prizes = [
     {
       place: 'First Place',
@@ -46,8 +55,7 @@ const PrizeInfo = () => {
     },
   ];
 
-  // Handle loading state
-  if (loading) {
+  if (loading === true) {
     return (
       <div className="py-16 bg-white dark:bg-dark-900">
         <div className="container-custom text-center">
@@ -57,7 +65,6 @@ const PrizeInfo = () => {
     );
   }
 
-  // Handle error state
   if (error) {
     return (
       <div className="py-16 bg-white dark:bg-dark-900">
