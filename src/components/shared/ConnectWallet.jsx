@@ -6,6 +6,7 @@ import { MONAD_TESTNET_CHAIN_ID } from '../../constants/contractAddresses';
 const ConnectWallet = ({ compact = false }) => {
   const { connect, disconnect, address, isConnected, chainId } = useWallet();
   const [isCorrectChain, setIsCorrectChain] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false); // Add this state
 
   useEffect(() => {
     if (!chainId) {
@@ -32,10 +33,16 @@ const ConnectWallet = ({ compact = false }) => {
   };
 
   const handleConnect = async () => {
+    // Prevent multiple connection attempts
+    if (isConnecting) return;
+    
     try {
+      setIsConnecting(true);
       await connect();
     } catch (error) {
       console.error('Failed to connect wallet:', error);
+    } finally {
+      setIsConnecting(false);
     }
   };
 
@@ -56,9 +63,16 @@ const ConnectWallet = ({ compact = false }) => {
             ? 'px-2 py-2 text-primary-600 dark:text-primary-500'
             : 'btn-primary'
         }`}
+        disabled={isConnecting} // Disable button while connecting
       >
-        <FiWifi className={compact ? 'h-5 w-5' : 'h-4 w-4'} />
-        {!compact && <span>Connect Wallet</span>}
+        {isConnecting ? (
+          <span>Connecting...</span>
+        ) : (
+          <>
+            <FiWifi className={compact ? 'h-5 w-5' : 'h-4 w-4'} />
+            {!compact && <span>Connect Wallet</span>}
+          </>
+        )}
       </button>
     );
   }

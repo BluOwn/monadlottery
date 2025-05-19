@@ -17,35 +17,47 @@ export const WalletProvider = ({ children }) => {
   const [provider, setProvider] = useState(null);
   const [chainId, setChainId] = useState(null);
   const [signer, setSigner] = useState(null);
+  const [isConnecting, setIsConnecting] = useState(false); // Add this to prevent multiple connection attempts
 
   const connect = useCallback(async () => {
+    // Prevent multiple simultaneous connection attempts
+    if (isConnecting) return null;
+    
     if (typeof window !== 'undefined' && window.ethereum) {
       try {
+        setIsConnecting(true);
+        
         // Request account access
         const accounts = await window.ethereum.request({
           method: 'eth_requestAccounts',
         });
         
-        const provider = new ethers.providers.Web3Provider(window.ethereum);
-        const signer = provider.getSigner();
+        if (!accounts || accounts.length === 0) {
+          throw new Error('No accounts returned from wallet');
+        }
+        
+        const newProvider = new ethers.providers.Web3Provider(window.ethereum);
+        const newSigner = newProvider.getSigner();
         const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
         
         setAddress(accounts[0]);
         setIsConnected(true);
-        setProvider(provider);
+        setProvider(newProvider);
         setChainId(chainIdHex);
-        setSigner(signer);
+        setSigner(newSigner);
         
         return accounts[0];
       } catch (error) {
         console.error('Error connecting to MetaMask', error);
         throw error;
+      } finally {
+        setIsConnecting(false);
       }
     } else {
       console.error('Please install MetaMask!');
       throw new Error('No ethereum wallet found');
     }
-  }, []);
+  }, [isConnecting]);
 
   const disconnect = useCallback(() => {
     setAddress(null);
@@ -57,56 +69,63 @@ export const WalletProvider = ({ children }) => {
 
   // Setup listeners
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.ethereum) {
-      const handleAccountsChanged = (accounts) => {
-        if (accounts.length > 0) {
-          setAddress(accounts[0]);
-          setIsConnected(true);
-        } else {
-          disconnect();
-        }
-      };
+    if (typeof window === 'undefined' || !window.ethereum) return;
 
-      const handleChainChanged = (chainIdHex) => {
-        setChainId(chainIdHex);
-        // Refresh provider and signer on chain change
-        if (window.ethereum) {
-          const provider = new ethers.providers.Web3Provider(window.ethereum);
-          setProvider(provider);
-          setSigner(provider.getSigner());
-        }
-      };
-
-      const handleDisconnect = () => {
+    const handleAccountsChanged = (accounts) => {
+      if (accounts && accounts.length > 0) {
+        setAddress(accounts[0]);
+        setIsConnected(true);
+      } else {
         disconnect();
-      };
+      }
+    };
 
-      // Check if already connected
-      window.ethereum
-        .request({ method: 'eth_accounts' })
-        .then(handleAccountsChanged)
-        .catch((err) => console.error(err));
-
-      // Get initial chain
-      window.ethereum
-        .request({ method: 'eth_chainId' })
-        .then(handleChainChanged)
-        .catch((err) => console.error(err));
-
-      // Add listeners
-      window.ethereum.on('accountsChanged', handleAccountsChanged);
-      window.ethereum.on('chainChanged', handleChainChanged);
-      window.ethereum.on('disconnect', handleDisconnect);
-
-      // Remove listeners on cleanup
-      return () => {
-        if (window.ethereum.removeListener) {
-          window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-          window.ethereum.removeListener('chainChanged', handleChainChanged);
-          window.ethereum.removeListener('disconnect', handleDisconnect);
+    const handleChainChanged = (chainIdHex) => {
+      setChainId(chainIdHex);
+      // Refresh provider and signer on chain change
+      if (window.ethereum) {
+        try {
+          const newProvider = new ethers.providers.Web3Provider(window.ethereum);
+          setProvider(newProvider);
+          setSigner(newProvider.getSigner());
+        } catch (err) {
+          console.error('Error updating provider after chain change:', err);
         }
-      };
-    }
+      }
+    };
+
+    const handleDisconnect = () => {
+      disconnect();
+    };
+
+    // Check if already connected (only on initial mount)
+    const checkConnection = async () => {
+      try {
+        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+        handleAccountsChanged(accounts);
+        
+        const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+        handleChainChanged(chainIdHex);
+      } catch (err) {
+        console.error('Error checking existing connection:', err);
+      }
+    };
+    
+    checkConnection();
+
+    // Add listeners
+    window.ethereum.on('accountsChanged', handleAccountsChanged);
+    window.ethereum.on('chainChanged', handleChainChanged);
+    window.ethereum.on('disconnect', handleDisconnect);
+
+    // Remove listeners on cleanup
+    return () => {
+      if (window.ethereum && window.ethereum.removeListener) {
+        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+        window.ethereum.removeListener('chainChanged', handleChainChanged);
+        window.ethereum.removeListener('disconnect', handleDisconnect);
+      }
+    };
   }, [disconnect]);
 
   return (
