@@ -1,12 +1,12 @@
 import { useEffect } from 'react';
 import useWalletStore from '../store/walletStore';
-import useLotteryStore from '../store/lotteryStore';
 
 export const useWallet = () => {
   const {
     address,
     isConnected,
     provider,
+    readProvider,
     signer,
     chainId,
     isConnecting,
@@ -16,11 +16,20 @@ export const useWallet = () => {
     disconnect,
     switchNetwork,
     initWallet,
+    initReadProvider,
+    refreshReadProvider,
+    getBestProvider,
     setupEventListeners
   } = useWalletStore();
   
-  // Initialize wallet on component mount
+  // Initialize wallet and read provider on component mount
   useEffect(() => {
+    // Initialize read provider first
+    initReadProvider().catch(err => {
+      console.error('Failed to initialize read provider:', err);
+    });
+    
+    // Then initialize wallet
     initWallet();
     
     // Set up event listeners for wallet changes
@@ -28,12 +37,13 @@ export const useWallet = () => {
     
     // Clean up event listeners on unmount
     return cleanup;
-  }, [initWallet, setupEventListeners]);
+  }, [initReadProvider, initWallet, setupEventListeners]);
   
   return {
     address,
     isConnected,
     provider,
+    readProvider,   // Expose the read provider
     signer,
     chainId,
     isConnecting,
@@ -41,7 +51,9 @@ export const useWallet = () => {
     walletError: error,
     connect,
     disconnect,
-    switchNetwork
+    switchNetwork,
+    getBestProvider, // Expose helper to get best available provider
+    refreshReadProvider // Expose method to refresh read provider if needed
   };
 };
 

@@ -3,6 +3,12 @@ import { ethers } from 'ethers';
 import toast from 'react-hot-toast';
 import { MONAD_TESTNET_CHAIN_ID, MONAD_TESTNET_CONFIG } from '../constants/contractAddresses';
 
+// Multiple RPC providers with fallbacks
+const RPC_URLS = [
+  "https://testnet-rpc.monad.xyz/",
+  // Add fallback URLs if you have them
+];
+
 // Helper for normalizing chain IDs
 const normalizeChainId = (id) => {
   if (!id) return '';
@@ -12,17 +18,66 @@ const normalizeChainId = (id) => {
   return id.toString();
 };
 
+// Create a read provider with retry
+const createReadProvider = async (url, retries = 3) => {
+  let lastError;
+  
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const provider = new ethers.providers.JsonRpcProvider(url);
+      
+      // Test the provider with a simple call
+      await provider.getBlockNumber();
+      return provider;
+    } catch (error) {
+      console.warn(`Provider attempt ${attempt + 1} failed:`, error);
+      lastError = error;
+      // Wait before retry (exponential backoff)
+      if (attempt < retries - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+      }
+    }
+  }
+  
+  console.error(`All ${retries} provider attempts failed:`, lastError);
+  throw lastError;
+};
+
 // Create wallet store with default values and safety checks
 const useWalletStore = create((set, get) => ({
   address: null,
   isConnected: false,
   provider: null,
+  readProvider: null, // New read-only provider
   signer: null,
   chainId: null,
   isConnecting: false,
   isCorrectNetwork: false,
   error: null,
   initialized: false, // Track if the wallet has been initialized
+  readProviderInitialized: false, // Track if read provider has been initialized
+
+  // Initialize read-only provider (independent of wallet)
+  initReadProvider: async () => {
+    // Skip if already initialized
+    if (get().readProviderInitialized) return get().readProvider;
+    
+    try {
+      // Try primary RPC URL
+      const provider = await createReadProvider(RPC_URLS[0]);
+      
+      set({ 
+        readProvider: provider, 
+        readProviderInitialized: true 
+      });
+      
+      return provider;
+    } catch (err) {
+      console.error('Failed to initialize read provider:', err);
+      set({ readProviderInitialized: false });
+      return null;
+    }
+  },
 
   // Initialize wallet from local storage or session
   initWallet: async () => {
@@ -30,6 +85,9 @@ const useWalletStore = create((set, get) => ({
       set({ initialized: true });
       return;
     }
+    
+    // Initialize read provider regardless of wallet state
+    await get().initReadProvider();
     
     // Skip if already initialized or no ethereum provider
     if (get().initialized || !window.ethereum) {
@@ -141,6 +199,7 @@ const useWalletStore = create((set, get) => ({
         setTimeout(() => get().switchNetwork(), 500);
       }
       
+      toast.success('Wallet connected successfully');
       return accounts[0];
     } catch (error) {
       console.error('Error connecting to wallet:', error);
@@ -177,6 +236,7 @@ const useWalletStore = create((set, get) => ({
       signer: null,
       isCorrectNetwork: false,
       error: null
+      // Note: we do NOT reset readProvider here
     });
     
     toast.success('Wallet disconnected');
@@ -240,6 +300,9 @@ const useWalletStore = create((set, get) => ({
 
   // Update on account or chain changes
   setupEventListeners: () => {
+    // Initialize read provider
+    get().initReadProvider();
+    
     if (typeof window === 'undefined' || !window.ethereum) {
       return () => {}; // Return a no-op cleanup function
     }
@@ -305,6 +368,23 @@ const useWalletStore = create((set, get) => ({
       }
     };
   },
+
+  // Get best available provider (wallet provider or read-only provider)
+  getBestProvider: () => {
+    return get().provider || get().readProvider;
+  },
+  
+  // Refresh read provider (useful if it becomes unresponsive)
+  refreshReadProvider: async () => {
+    try {
+      const provider = await createReadProvider(RPC_URLS[0]);
+      set({ readProvider: provider, readProviderInitialized: true });
+      return provider;
+    } catch (err) {
+      console.error('Failed to refresh read provider:', err);
+      return null;
+    }
+  }
 }));
 
 export default useWalletStore;

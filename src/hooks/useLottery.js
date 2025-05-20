@@ -73,41 +73,17 @@ const throttledRpcCall = (fn) => {
   });
 };
 
-// Create a provider with retry mechanism and throttling
-const createProvider = async (url) => {
-  const provider = new ethers.providers.JsonRpcProvider(url);
-  
-  // Create a wrapper around the provider's call method
-  const originalCall = provider.call;
-  provider.call = async function(...args) {
-    return throttledRpcCall(() => originalCall.apply(provider, args));
-  };
-  
-  // Similarly wrap other commonly used methods
-  const methods = ['getBalance', 'getTransactionCount', 'getCode', 'getStorageAt'];
-  methods.forEach(method => {
-    const original = provider[method];
-    if (typeof original === 'function') {
-      provider[method] = async function(...args) {
-        return throttledRpcCall(() => original.apply(provider, args));
-      };
-    }
-  });
-  
-  // Test the provider with a basic call
-  try {
-    await throttledRpcCall(() => provider.getBlockNumber());
-    return provider;
-  } catch (error) {
-    console.error(`Provider ${url} failed:`, error);
-    throw error;
-  }
+// DEBUG LOGGER
+const logDebug = (message, data = null) => {
+  console.log(`[LOTTERY DEBUG] ${message}`, data || '');
 };
 
 export const useLottery = () => {
-  const { signer, provider: walletProvider, address, isConnected, isCorrectNetwork } = useWallet();
+  logDebug('Initializing useLottery hook');
+  
+  const { signer, provider: walletProvider, readProvider, address, isConnected, isCorrectNetwork } = useWallet();
   const [contract, setContract] = useState(null);
-  const [readProvider, setReadProvider] = useState(null);
+  const [readContract, setReadContract] = useState(null); // Separate read-only contract
   const [lotteryStatus, setLotteryStatus] = useState({
     isActive: false,
     totalTickets: 0,
@@ -131,86 +107,75 @@ export const useLottery = () => {
     }, delay);
   }, []);
   
-  // Initialize throttled provider
+  // Initialize read contract (this runs whenever readProvider changes)
   useEffect(() => {
-    let isMounted = true;
+    if (!readProvider) {
+      logDebug('No read provider available yet');
+      return;
+    }
     
-    const init = async () => {
-      try {
-        // Create a throttled provider
-        const provider = await createProvider(RPC_URLS[0]);
-        
-        if (isMounted) {
-          setReadProvider(provider);
-        }
-      } catch (err) {
-        console.error('Failed to initialize provider:', err);
-        if (isMounted) {
-          setError('Failed to connect to network. Please try again later.');
-        }
-      }
-    };
+    logDebug('Initializing read contract with provider', readProvider);
     
-    init();
-    
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    try {
+      // Initialize read-only contract
+      const contractInstance = new ethers.Contract(
+        MONAD_LOTTERY_CONTRACT_ADDRESS,
+        MonadLotteryABI,
+        readProvider
+      );
+      
+      logDebug('Read contract initialized successfully');
+      setReadContract(contractInstance);
+      setError(null);
+    } catch (err) {
+      console.error('Error initializing read contract:', err);
+      setError('Failed to initialize contract with read provider');
+    }
+  }, [readProvider]);
   
-  // Setup contract instance
+  // Setup writable contract instance when wallet connects
   useEffect(() => {
-    let isMounted = true;
+    if (!walletProvider || !signer || !isConnected) {
+      if (!walletProvider) logDebug('No wallet provider available');
+      if (!signer) logDebug('No signer available');
+      if (!isConnected) logDebug('Wallet not connected');
+      return;
+    }
     
-    const initContract = async () => {
-      // Use wallet provider if available, otherwise use read provider
-      const providerToUse = walletProvider || readProvider;
+    logDebug('Initializing writable contract with wallet provider', { walletProvider, signer });
+    
+    try {
+      const contractInstance = new ethers.Contract(
+        MONAD_LOTTERY_CONTRACT_ADDRESS,
+        MonadLotteryABI,
+        signer
+      );
       
-      if (!providerToUse) return;
-      
-      try {
-        const contractInstance = new ethers.Contract(
-          MONAD_LOTTERY_CONTRACT_ADDRESS,
-          MonadLotteryABI,
-          providerToUse
-        );
-        
-        // If we have a signer, create a writable contract
-        const contractWithSigner = (signer && isConnected) 
-          ? contractInstance.connect(signer)
-          : contractInstance;
-        
-        if (isMounted) {
-          setContract(contractWithSigner);
-          setError(null);
-        }
-      } catch (err) {
-        console.error('Error setting up contract:', err);
-        if (isMounted) {
-          setError('Failed to initialize contract');
-          clearErrorAfterDelay();
-        }
-      }
-    };
-    
-    initContract();
-    
-    return () => {
-      isMounted = false;
-    };
-  }, [walletProvider, readProvider, signer, isConnected, clearErrorAfterDelay]);
+      logDebug('Writable contract initialized successfully');
+      setContract(contractInstance);
+      setError(null);
+    } catch (err) {
+      console.error('Error setting up writable contract:', err);
+      setError('Failed to initialize contract with wallet');
+      clearErrorAfterDelay();
+    }
+  }, [walletProvider, signer, isConnected, clearErrorAfterDelay]);
   
   // Function to safely call contract methods with throttling
-  const safeContractCall = async (method, ...args) => {
-    if (!contract) {
-      throw new Error('Contract not initialized');
+  const safeContractCall = async (contractObj, method, ...args) => {
+    if (!contractObj) {
+      throw new Error(`Contract not initialized for method ${method}`);
     }
+    
+    logDebug(`Calling contract method: ${method}`, { args });
     
     // Use throttled calls to avoid rate limiting
     return throttledRpcCall(async () => {
       try {
         // Call the contract method
-        return await contract[method](...args);
+        const result = await contractObj[method](...args);
+        logDebug(`Contract call ${method} successful`, result);
+        return result;
       } catch (err) {
         console.error(`Error calling ${method}:`, err);
         throw err;
@@ -218,28 +183,47 @@ export const useLottery = () => {
     });
   };
   
-  // Fetch lottery status
+  // Fetch lottery status using the appropriate contract
   const fetchLotteryStatus = useCallback(async () => {
-    if (!contract) return null;
+    logDebug('Fetching lottery status');
+    
+    // Use read-only contract if available, otherwise use writable contract
+    const contractToUse = readContract || contract;
+    
+    if (!contractToUse) {
+      console.error('No contract available for fetching lottery status');
+      setError('Cannot fetch lottery status: No contract available');
+      return null;
+    }
     
     setLoading(true);
     
     try {
       // Get lottery status with throttling
-      const status = await safeContractCall('getLotteryStatus');
+      logDebug('Calling getLotteryStatus on contract', contractToUse);
+      const status = await safeContractCall(contractToUse, 'getLotteryStatus');
       
-      if (!status) return null;
+      if (!status) {
+        logDebug('getLotteryStatus returned null or undefined');
+        return null;
+      }
       
-      setLotteryStatus({
+      logDebug('Lottery status received', status);
+      
+      const updatedStatus = {
         isActive: status.isActive || false,
         totalTickets: status.tickets ? Number(status.tickets) : 0,
         totalPoolAmount: status.pool ? ethers.utils.formatEther(status.pool) : '0',
         rewardsDistributed: status.awarded || false,
-      });
+      };
+      
+      logDebug('Processed lottery status', updatedStatus);
+      setLotteryStatus(updatedStatus);
       
       // Get top buyer with throttling
       try {
-        const topBuyerData = await safeContractCall('getTopBuyer');
+        logDebug('Fetching top buyer');
+        const topBuyerData = await safeContractCall(contractToUse, 'getTopBuyer');
         
         if (topBuyerData) {
           const [topBuyerAddress, topBuyerTicketCount] = topBuyerData;
@@ -247,70 +231,98 @@ export const useLottery = () => {
             address: topBuyerAddress || null,
             ticketCount: topBuyerTicketCount ? Number(topBuyerTicketCount) : 0,
           });
+          logDebug('Top buyer data', { address: topBuyerAddress, ticketCount: topBuyerTicketCount });
         }
       } catch (topBuyerErr) {
         console.error('Error fetching top buyer:', topBuyerErr);
+        logDebug('Error fetching top buyer', topBuyerErr);
       }
       
       setError(null);
       return status;
     } catch (err) {
       console.error('Error fetching lottery status:', err);
+      logDebug('Error fetching lottery status', err);
       setError('Failed to fetch lottery status. The network may be congested.');
       clearErrorAfterDelay();
       return null;
     } finally {
       setLoading(false);
     }
-  }, [contract, clearErrorAfterDelay]);
+  }, [contract, readContract, clearErrorAfterDelay]);
   
   // Fetch ticket price
   const fetchTicketPrice = useCallback(async () => {
-    if (!contract) return null;
+    logDebug('Fetching ticket price');
+    
+    // Use read-only contract if available, otherwise use writable contract
+    const contractToUse = readContract || contract;
+    
+    if (!contractToUse) {
+      console.error('No contract available for fetching ticket price');
+      return null;
+    }
     
     try {
-      const price = await safeContractCall('TICKET_PRICE');
+      const price = await safeContractCall(contractToUse, 'TICKET_PRICE');
       
       if (price) {
-        setTicketPrice(ethers.utils.formatEther(price));
+        const formattedPrice = ethers.utils.formatEther(price);
+        logDebug('Ticket price received', { raw: price.toString(), formatted: formattedPrice });
+        setTicketPrice(formattedPrice);
         setError(null);
+      } else {
+        logDebug('No ticket price returned from contract');
       }
       
       return price;
     } catch (err) {
       console.error('Error fetching ticket price:', err);
+      logDebug('Error fetching ticket price', err);
       setError('Failed to fetch ticket price');
       clearErrorAfterDelay();
       return null;
     }
-  }, [contract, clearErrorAfterDelay]);
+  }, [contract, readContract, clearErrorAfterDelay]);
   
-  // Fetch user tickets
+  // Fetch user tickets - requires wallet connection
   const fetchUserTickets = useCallback(async () => {
-    if (!contract || !address) return null;
+    logDebug('Fetching user tickets', { address });
+    
+    // We need the writable contract for user-specific data
+    if (!contract || !address) {
+      logDebug('Cannot fetch user tickets: missing contract or address', { contract: !!contract, address });
+      return null;
+    }
     
     setLoading(true);
     
     try {
       // Use sequential fetch with throttling to avoid rate limits
-      const ticketCountResult = await safeContractCall('getUserTicketCount', address);
+      const ticketCountResult = await safeContractCall(contract, 'getUserTicketCount', address);
+      
+      logDebug('User ticket count result', ticketCountResult);
       
       let ticketCount = 0;
       if (ticketCountResult) {
         try {
           ticketCount = ticketCountResult.toNumber();
           setUserTicketCount(ticketCount);
+          logDebug('User ticket count', ticketCount);
         } catch (e) {
           ticketCount = Number(ticketCountResult.toString());
           setUserTicketCount(ticketCount);
+          logDebug('User ticket count (from string)', ticketCount);
         }
       } else {
         setUserTicketCount(0);
+        logDebug('No ticket count result, setting to 0');
       }
       
       // Only fetch tickets if there are any
       if (ticketCount > 0) {
-        const ticketsResult = await safeContractCall('getUserTickets', address);
+        logDebug('Fetching user tickets for count > 0');
+        const ticketsResult = await safeContractCall(contract, 'getUserTickets', address);
         
         if (ticketsResult) {
           const processedTickets = ticketsResult.map(t => {
@@ -321,17 +333,21 @@ export const useLottery = () => {
             }
           });
           setUserTickets(processedTickets);
+          logDebug('User tickets processed', processedTickets);
         } else {
           setUserTickets([]);
+          logDebug('No tickets result, setting empty array');
         }
       } else {
         setUserTickets([]);
+        logDebug('Ticket count is 0, setting empty array');
       }
       
       setError(null);
       return { count: ticketCount, tickets: userTickets };
     } catch (err) {
       console.error('Error fetching user tickets:', err);
+      logDebug('Error fetching user tickets', err);
       setError('Failed to fetch your tickets. The network may be congested.');
       clearErrorAfterDelay();
       setUserTickets([]);
@@ -344,32 +360,39 @@ export const useLottery = () => {
   
   // Buy tickets with backoff strategy for rate limits
   const buyTickets = useCallback(async (numTickets) => {
+    logDebug('Buying tickets', { numTickets });
+    
     if (!contract || !isConnected) {
+      logDebug('Cannot buy tickets: not connected', { contract: !!contract, isConnected });
       setError('Wallet not connected');
       toast.error('Wallet not connected');
       return false;
     }
     
     if (!isCorrectNetwork) {
+      logDebug('Cannot buy tickets: wrong network', { isCorrectNetwork });
       setError('Please switch to Monad Testnet');
       toast.error('Please switch to Monad Testnet');
       return false;
     }
     
     if (!numTickets || numTickets <= 0) {
+      logDebug('Cannot buy tickets: invalid quantity', { numTickets });
       setError('Invalid number of tickets');
       toast.error('Invalid number of tickets');
       return false;
     }
     
-    // NEW: Limit number of tickets per transaction to 10
+    // Limit number of tickets per transaction to 10
     if (numTickets > 10) {
+      logDebug('Cannot buy tickets: too many tickets', { numTickets });
       setError('Maximum 10 tickets per transaction');
       toast.error('Maximum 10 tickets per transaction');
       return false;
     }
     
     if (!lotteryStatus.isActive) {
+      logDebug('Cannot buy tickets: lottery inactive', { lotteryStatus });
       setError('Lottery is not active');
       toast.error('Lottery is not active');
       return false;
@@ -378,9 +401,9 @@ export const useLottery = () => {
     setLoading(true);
     
     try {
-      // FIXED: Use BigNumber math for precise calculations instead of floating point
-      // First get the ticket price in wei
-      const ticketPriceWei = await safeContractCall('TICKET_PRICE');
+      // Use BigNumber math for precise calculations
+      logDebug('Getting ticket price from contract');
+      const ticketPriceWei = await safeContractCall(contract, 'TICKET_PRICE');
       
       if (!ticketPriceWei) {
         throw new Error('Could not get ticket price from contract');
@@ -390,10 +413,12 @@ export const useLottery = () => {
       const totalCostWei = ticketPriceWei.mul(numTickets);
       
       // Log the values for debugging
-      console.log('Ticket price (wei):', ticketPriceWei.toString());
-      console.log('Number of tickets:', numTickets);
-      console.log('Total cost (wei):', totalCostWei.toString());
-      console.log('Total cost (ETH):', ethers.utils.formatEther(totalCostWei));
+      logDebug('Purchase calculations', {
+        ticketPriceWei: ticketPriceWei.toString(),
+        numTickets,
+        totalCostWei: totalCostWei.toString(),
+        totalCostEth: ethers.utils.formatEther(totalCostWei)
+      });
       
       // Show pending toast
       const pendingToast = toast.loading(`Buying ${numTickets} ticket${numTickets > 1 ? 's' : ''}...`);
@@ -401,10 +426,16 @@ export const useLottery = () => {
       // Add significant gas buffer for network congestion
       let gasEstimate;
       try {
+        logDebug('Estimating gas for purchase');
         gasEstimate = await contract.estimateGas.buyTickets(numTickets, { value: totalCostWei });
         gasEstimate = gasEstimate.mul(150).div(100); // 50% buffer
+        logDebug('Gas estimation successful', { 
+          original: gasEstimate.div(150).mul(100).toString(),
+          withBuffer: gasEstimate.toString()
+        });
       } catch (gasErr) {
         console.error('Gas estimation error:', gasErr);
+        logDebug('Gas estimation error', gasErr);
         toast.error('Failed to estimate gas. Network may be congested.', { id: pendingToast });
         setError('Failed to estimate gas. Please try again when network is less congested.');
         clearErrorAfterDelay(8000);
@@ -412,24 +443,39 @@ export const useLottery = () => {
       }
       
       // Send transaction with the precise wei amount
+      logDebug('Sending buyTickets transaction');
       const tx = await contract.buyTickets(numTickets, { 
         value: totalCostWei,
         gasLimit: gasEstimate
       });
       
+      logDebug('Transaction sent', { hash: tx.hash });
       toast.loading(`Transaction submitted. Waiting for confirmation...`, { id: pendingToast });
       
       // Wait for confirmation
+      logDebug('Waiting for transaction confirmation');
       const receipt = await tx.wait();
+      logDebug('Transaction confirmed', { 
+        blockNumber: receipt.blockNumber,
+        gasUsed: receipt.gasUsed.toString()
+      });
       
       // Success!
       toast.success(`Successfully purchased ${numTickets} ticket${numTickets > 1 ? 's' : ''}!`, { id: pendingToast });
       
       // Refresh data with a delay to allow blockchain to update
       setTimeout(() => {
-        fetchLotteryStatus().catch(console.error);
+        logDebug('Refreshing data after purchase');
+        fetchLotteryStatus().catch(err => {
+          console.error('Error refreshing lottery status after purchase:', err);
+          logDebug('Error refreshing lottery status after purchase', err);
+        });
+        
         if (address) {
-          fetchUserTickets().catch(console.error);
+          fetchUserTickets().catch(err => {
+            console.error('Error refreshing user tickets after purchase:', err);
+            logDebug('Error refreshing user tickets after purchase', err);
+          });
         }
       }, 3000);
       
@@ -437,6 +483,7 @@ export const useLottery = () => {
       return true;
     } catch (err) {
       console.error('Error buying tickets:', err);
+      logDebug('Error buying tickets', err);
       
       // Format a user-friendly error message
       let errorMessage = 'Transaction failed';
@@ -455,6 +502,7 @@ export const useLottery = () => {
         }
       }
       
+      logDebug('Purchase error message', errorMessage);
       toast.error(errorMessage);
       setError(errorMessage);
       clearErrorAfterDelay(8000);
@@ -466,46 +514,69 @@ export const useLottery = () => {
     contract, 
     isConnected, 
     isCorrectNetwork,
-    ticketPrice,
     lotteryStatus,
     address,
     fetchLotteryStatus,
     fetchUserTickets,
-    clearErrorAfterDelay,
-    safeContractCall
+    clearErrorAfterDelay
   ]);
   
-  // Initial data fetch
+  // Fetch initial data when components load
   useEffect(() => {
-    if (contract) {
-      // Stagger requests to avoid rate limiting
-      fetchLotteryStatus().catch(console.error);
+    // First check if we have any contract available (read or write)
+    const contractToUse = readContract || contract;
+    
+    if (contractToUse) {
+      logDebug('Contract available, fetching initial data', { 
+        readContract: !!readContract, 
+        contract: !!contract
+      });
       
-      // Slight delay before fetching ticket price
-      setTimeout(() => {
-        fetchTicketPrice().catch(console.error);
-      }, 2000);
+      // Fetch public data immediately
+      const fetchInitialData = async () => {
+        setLoading(true);
+        try {
+          await fetchLotteryStatus();
+          await fetchTicketPrice();
+        } catch (err) {
+          console.error('Error fetching initial lottery data:', err);
+          logDebug('Error fetching initial lottery data', err);
+          setError('Failed to fetch lottery data. Try refreshing the page.');
+          clearErrorAfterDelay(8000);
+        } finally {
+          setLoading(false);
+        }
+      };
       
-      // Further delay before fetching user tickets
-      if (address) {
-        setTimeout(() => {
-          fetchUserTickets().catch(console.error);
-        }, 4000);
-      }
+      fetchInitialData();
+    } else {
+      logDebug('No contract available yet, waiting for initialization');
     }
-  }, [contract, address, fetchLotteryStatus, fetchTicketPrice, fetchUserTickets]);
+  }, [readContract, contract, fetchLotteryStatus, fetchTicketPrice, clearErrorAfterDelay]);
   
-  // Set up refresh interval for lottery status
+  // Fetch user data when wallet connects
   useEffect(() => {
-    if (!contract) return;
-    
-    // Refresh lottery status less frequently to avoid rate limiting
-    const interval = setInterval(() => {
-      fetchLotteryStatus().catch(console.error);
-    }, 60000); // Once every minute instead of every 30 seconds
-    
-    return () => clearInterval(interval);
-  }, [contract, fetchLotteryStatus]);
+    if (contract && address && isConnected) {
+      logDebug('Wallet connected, fetching user data', { address });
+      fetchUserTickets().catch(err => {
+        console.error('Error fetching user tickets on wallet connect:', err);
+        logDebug('Error fetching user tickets on wallet connect', err);
+      });
+    }
+  }, [contract, address, isConnected, fetchUserTickets]);
+  
+  // Debug output for major state changes
+  useEffect(() => {
+    logDebug('Lottery status updated', lotteryStatus);
+  }, [lotteryStatus]);
+  
+  useEffect(() => {
+    logDebug('Ticket price updated', ticketPrice);
+  }, [ticketPrice]);
+  
+  useEffect(() => {
+    logDebug('User tickets updated', { count: userTicketCount, tickets: userTickets });
+  }, [userTickets, userTicketCount]);
   
   return {
     lotteryStatus,
