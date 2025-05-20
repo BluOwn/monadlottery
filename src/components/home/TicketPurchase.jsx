@@ -13,11 +13,14 @@ const logDebug = (message, data = null) => {
   console.log(`[TICKET PURCHASE] ${message}`, data || '');
 };
 
+// Constants
+const MAX_TICKETS_PER_TRANSACTION = 10;
+
 // Quantity selector component
-const QuantitySelector = ({ quantity, onChange, onDecrease, onIncrease, disabled }) => (
+const QuantitySelector = ({ quantity, onChange, onDecrease, onIncrease, disabled, maxQuantity }) => (
   <div className="flex flex-col gap-2">
     <label htmlFor="quantity" className="text-lg font-medium text-dark-800 dark:text-dark-200">
-      Ticket Quantity
+      Ticket Quantity (Max: {maxQuantity})
     </label>
     <div className="flex items-center">
       <button 
@@ -31,6 +34,7 @@ const QuantitySelector = ({ quantity, onChange, onDecrease, onIncrease, disabled
         id="quantity"
         type="number"
         min="1"
+        max={maxQuantity}
         value={quantity}
         onChange={onChange}
         className="w-20 px-4 py-2 text-center border-y border-dark-300 dark:border-dark-600
@@ -40,7 +44,7 @@ const QuantitySelector = ({ quantity, onChange, onDecrease, onIncrease, disabled
       <button 
         onClick={onIncrease}
         className="px-3 py-2 bg-dark-100 dark:bg-dark-700 rounded-r-lg hover:bg-dark-200 dark:hover:bg-dark-600 transition-colors disabled:opacity-50"
-        disabled={disabled}
+        disabled={quantity >= maxQuantity || disabled}
       >
         <FiPlus />
       </button>
@@ -151,7 +155,14 @@ const TicketPurchase = () => {
   const handleQuantityChange = (e) => {
     const value = parseInt(e.target.value);
     if (!isNaN(value) && value > 0) {
-      setQuantity(value);
+      // Limit to max tickets per transaction
+      const limitedValue = Math.min(value, MAX_TICKETS_PER_TRANSACTION);
+      setQuantity(limitedValue);
+      
+      // Show a warning if the user tried to enter a higher value
+      if (value > MAX_TICKETS_PER_TRANSACTION) {
+        toast.error(`Maximum ${MAX_TICKETS_PER_TRANSACTION} tickets per transaction`);
+      }
     }
   };
 
@@ -162,7 +173,11 @@ const TicketPurchase = () => {
   };
 
   const increaseQuantity = () => {
-    setQuantity(quantity + 1);
+    if (quantity < MAX_TICKETS_PER_TRANSACTION) {
+      setQuantity(quantity + 1);
+    } else {
+      toast.error(`Maximum ${MAX_TICKETS_PER_TRANSACTION} tickets per transaction`);
+    }
   };
 
   const totalCost = (parseFloat(ticketPrice) * quantity).toFixed(2);
@@ -171,6 +186,13 @@ const TicketPurchase = () => {
     if (!isConnected) {
       logDebug('Cannot purchase: wallet not connected');
       toast.error('Please connect your wallet first');
+      return;
+    }
+    
+    // Double-check quantity is within limits
+    if (quantity > MAX_TICKETS_PER_TRANSACTION) {
+      toast.error(`Maximum ${MAX_TICKETS_PER_TRANSACTION} tickets per transaction`);
+      setQuantity(MAX_TICKETS_PER_TRANSACTION);
       return;
     }
     
@@ -278,13 +300,14 @@ const TicketPurchase = () => {
             )}
 
             <div className="flex flex-col gap-6">
-              {/* Quantity selector */}
+              {/* Quantity selector with max limit */}
               <QuantitySelector 
                 quantity={quantity} 
                 onChange={handleQuantityChange}
                 onDecrease={decreaseQuantity}
                 onIncrease={increaseQuantity}
                 disabled={!isLotteryActive || isProcessing || isLoading}
+                maxQuantity={MAX_TICKETS_PER_TRANSACTION}
               />
 
               {/* Price summary */}
